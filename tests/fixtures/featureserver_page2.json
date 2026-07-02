@@ -1,0 +1,24 @@
+{
+  "type": "FeatureCollection",
+  "crs": { "type": "name", "properties": { "name": "EPSG:4326" } },
+  "features": [
+    {
+      "type": "Feature",
+      "id": 2,
+      "geometry": { "type": "Point", "coordinates": [1.2, 41.2] },
+      "properties": {
+        "ACT_NUM_ACTUACIO": "100000002",
+        "TAL_COD_ALARMA2": "VU",
+        "TAL_DESC_ALARMA2": "Incendi vegetació urbana",
+        "ACT_SITUACIO": "P",
+        "MUNICIPI_DPX": "Municipi V",
+        "MUNICIPI_SIG": "Municipi V",
+        "DATA_ACT": 1782301000000,
+        "ACT_DAT_INICI": 1782301000000,
+        "ACT_DAT_FI": null,
+        "ACT_NUM_VEH": 1,
+        "COM_FASE": "Controlat"
+      }
+    }
+  ]
+}

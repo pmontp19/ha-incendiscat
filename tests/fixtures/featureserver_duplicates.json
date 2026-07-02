@@ -1,0 +1,60 @@
+{
+  "type": "FeatureCollection",
+  "crs": { "type": "name", "properties": { "name": "EPSG:4326" } },
+  "features": [
+    {
+      "type": "Feature",
+      "id": 900001,
+      "geometry": { "type": "Point", "coordinates": [1.5, 41.5] },
+      "properties": {
+        "ACT_NUM_ACTUACIO": "999000001",
+        "ACT_IDE_ACTUACIO": "AC",
+        "ACT_DAT_ACTUACIO": 1782300000000,
+        "TAL_COD_ALARMA1": "IV",
+        "TAL_DESC_ALARMA1": "incendi vegetació",
+        "TAL_COD_ALARMA2": "VF",
+        "TAL_DESC_ALARMA2": "Incendi vegetació forestal",
+        "ACT_SITUACIO": "N",
+        "ACT_DAT_ACTUAL": 1782300000000,
+        "ACT_DAT_INICI": 1782300000000,
+        "ACT_DAT_FI": null,
+        "ACT_URGENT": "S",
+        "MUNICIPI_DPX": "Test Vell",
+        "MUNICIPI_SIG": "Test Vell",
+        "DATA_ACT": 1782300000000,
+        "OBJECTID": 900001,
+        "ACT_NUM_VEH": 0,
+        "ESRI_OID": 900001,
+        "GlobalID": "00000000-0000-0000-0000-000000000001",
+        "COM_FASE": null
+      }
+    },
+    {
+      "type": "Feature",
+      "id": 900002,
+      "geometry": { "type": "Point", "coordinates": [1.5, 41.5] },
+      "properties": {
+        "ACT_NUM_ACTUACIO": "999000001",
+        "ACT_IDE_ACTUACIO": "AC",
+        "ACT_DAT_ACTUACIO": 1782300000000,
+        "TAL_COD_ALARMA1": "IV",
+        "TAL_DESC_ALARMA1": "incendi vegetació",
+        "TAL_COD_ALARMA2": "VF",
+        "TAL_DESC_ALARMA2": "Incendi vegetació forestal",
+        "ACT_SITUACIO": "A",
+        "ACT_DAT_ACTUAL": 1782310000000,
+        "ACT_DAT_INICI": 1782300000000,
+        "ACT_DAT_FI": null,
+        "ACT_URGENT": "S",
+        "MUNICIPI_DPX": "Test Nou",
+        "MUNICIPI_SIG": "Test Nou",
+        "DATA_ACT": 1782310000000,
+        "OBJECTID": 900002,
+        "ACT_NUM_VEH": 4,
+        "ESRI_OID": 900002,
+        "GlobalID": "00000000-0000-0000-0000-000000000002",
+        "COM_FASE": "Actiu"
+      }
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "type": "FeatureCollection",
+  "crs": { "type": "name", "properties": { "name": "EPSG:4326" } },
+  "properties": { "exceededTransferLimit": true },
+  "features": [
+    {
+      "type": "Feature",
+      "id": 1,
+      "geometry": { "type": "Point", "coordinates": [1.1, 41.1] },
+      "properties": {
+        "ACT_NUM_ACTUACIO": "100000001",
+        "TAL_COD_ALARMA2": "VF",
+        "TAL_DESC_ALARMA2": "Incendi vegetació forestal",
+        "ACT_SITUACIO": "A",
+        "MUNICIPI_DPX": "Municipi U",
+        "MUNICIPI_SIG": "Municipi U",
+        "DATA_ACT": 1782300000000,
+        "ACT_DAT_INICI": 1782300000000,
+        "ACT_DAT_FI": null,
+        "ACT_NUM_VEH": 2,
+        "COM_FASE": "Actiu"
+      }
+    }
+  ]
+}
