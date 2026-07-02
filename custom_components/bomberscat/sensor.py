@@ -59,9 +59,22 @@ from .const import DOMAIN
 from .coordinator import BomberscatDataUpdateCoordinator, BomberscatState
 from .icons import DEFAULT_FASE_ICON, DEFAULT_TIPUS_ICON, FASE_ICONS, TIPUS_ICONS
 from .models import Fase, Incident, Tipus
+from .pla_alfa import PlaAlfaCoordinator, PlaAlfaRisk
 
 NO_MUNICIPI = "—"
 FIRES_UNIT = "incendis"
+
+# mdi icon per PERIL_M level (0-4), for FireRiskSensor. Not in icons.py: that
+# module maps `Incident`-derived enums (`Fase`/`Tipus`), while this is keyed
+# by a plain int level from a different data source (Pla Alfa, not Bombers).
+_RISK_ICONS: dict[int, str] = {
+    0: "mdi:shield-check",
+    1: "mdi:shield-alert-outline",
+    2: "mdi:shield-alert",
+    3: "mdi:fire-alert",
+    4: "mdi:fire",
+}
+_DEFAULT_RISK_ICON = "mdi:help-rhombus"
 
 
 def _active_incidents(
@@ -82,6 +95,24 @@ def _nearest(
     if not incidents:
         return None
     return min(incidents, key=coordinator.distance_km)
+
+
+def _device_info(entry: BomberscatConfigEntry) -> DeviceInfo:
+    """Shared `DeviceInfo` for every bomberscat entity (one device per entry).
+
+    Used by both `BomberscatEntity` (Bombers-backed sensors) and
+    `FireRiskSensor` (Pla-Alfa-backed, Task 10): the fire-risk entities
+    belong to the *same* HA device even though they poll a different
+    coordinator, since from the user's perspective this is all one
+    "Bombers de Catalunya" integration instance.
+    """
+    return DeviceInfo(
+        identifiers={(DOMAIN, entry.entry_id)},
+        name="Bombers de Catalunya",
+        manufacturer="Generalitat de Catalunya",
+        model="Incendis forestals",
+        entry_type=DeviceEntryType.SERVICE,
+    )
 
 
 class BomberscatEntity(CoordinatorEntity[BomberscatDataUpdateCoordinator]):
@@ -107,13 +138,7 @@ class BomberscatEntity(CoordinatorEntity[BomberscatDataUpdateCoordinator]):
         # handles that); until then HA falls back to showing the key itself
         # as the entity name, which is acceptable per this task's brief.
         self._attr_translation_key = key
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, entry.entry_id)},
-            name="Bombers de Catalunya",
-            manufacturer="Generalitat de Catalunya",
-            model="Incendis forestals",
-            entry_type=DeviceEntryType.SERVICE,
-        )
+        self._attr_device_info = _device_info(entry)
 
 
 class ActiveFiresSensor(BomberscatEntity, SensorEntity):
@@ -294,6 +319,60 @@ class TotalVehiclesSensor(BomberscatEntity, SensorEntity):
         return sum(inc.vehicles for inc in state.incidents.values())
 
 
+class FireRiskSensor(CoordinatorEntity[PlaAlfaCoordinator], SensorEntity):
+    """`sensor.bomberscat_fire_risk` (feature-spec §3.8, Task 10).
+
+    Backed by `PlaAlfaCoordinator`, not `BomberscatDataUpdateCoordinator` —
+    hence it does not subclass `BomberscatEntity` (typed for the latter) —
+    but shares the same `DeviceInfo` (see `_device_info`) so it shows up
+    under the same "Bombers de Catalunya" device.
+
+    Availability follows `CoordinatorEntity`'s default (`coordinator
+    .last_update_success`): when Pla Alfa is down (including a failed first
+    refresh — see `__init__.py`'s `async_setup_entry`), this entity reports
+    `unavailable` while the Bombers-backed sensors keep working normally
+    (independent coordinators/independent failure domains, Task 10's
+    acceptance criterion).
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "fire_risk"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self, coordinator: PlaAlfaCoordinator, entry: BomberscatConfigEntry
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_fire_risk"
+        self._attr_device_info = _device_info(entry)
+
+    @property
+    def native_value(self) -> int | None:
+        risk: PlaAlfaRisk | None = self.coordinator.data
+        return risk.peril_m if risk is not None else None
+
+    @property
+    def icon(self) -> str:
+        risk: PlaAlfaRisk | None = self.coordinator.data
+        if risk is None:
+            return _DEFAULT_RISK_ICON
+        return _RISK_ICONS.get(risk.peril_m, _DEFAULT_RISK_ICON)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        risk: PlaAlfaRisk | None = self.coordinator.data
+        if risk is None:
+            return None
+        return {
+            "nivell_text": risk.nivell_text,
+            "comarca": risk.comarca,
+            "municipi": risk.municipi,
+            "data_vigencia": risk.data_vigencia,
+            "hora_vigencia": risk.hora_vigencia,
+            "perill_dema": risk.perill_dema,
+        }
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: BomberscatConfigEntry,
@@ -309,5 +388,6 @@ async def async_setup_entry(
             FiresPerFaseSensor(coordinator, entry),
             FiresPerTipusSensor(coordinator, entry),
             TotalVehiclesSensor(coordinator, entry),
+            FireRiskSensor(coordinator.pla_alfa, entry),
         ]
     )

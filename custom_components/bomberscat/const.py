@@ -103,3 +103,14 @@ MAX_HIGH_RISK_THRESHOLD = 4
 # Grace period (minutes) before a resolved (Extingit) fire's geo_location
 # entity is removed, to avoid flickering in the entity registry.
 DEFAULT_RESOLVED_GRACE_PERIOD_MIN = 60
+
+# Pla Alfa polling interval (Task 10). docs/03-feature-spec.md §3.8 suggests
+# scheduled refreshes at 00:30/09:45 local (just after the official 00:00/
+# 09:30 updates), which would need `async_track_time_change` instead of the
+# coordinator's plain `update_interval`. We use a simple fixed interval
+# instead (acceptable per docs/05-implementation-plan.md Task 10): Pla Alfa
+# only changes once or twice a day, so polling every 6h means picking up
+# each change within at most ~6h — good enough for a "don't light a fire
+# today" sensor, and far simpler/more robust than time-of-day scheduling
+# (no missed-wakeup edge cases across HA restarts).
+PLA_ALFA_SCAN_INTERVAL_HOURS = 6

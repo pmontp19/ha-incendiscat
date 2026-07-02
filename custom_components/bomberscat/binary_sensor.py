@@ -1,11 +1,18 @@
-"""Binary sensor platform for bomberscat (Task 8: `fire_nearby`).
+"""Binary sensor platform for bomberscat (Task 8: `fire_nearby`; Task 10:
+`high_risk`).
 
 Implements `binary_sensor.bomberscat_fire_nearby` (docs/03-feature-spec.md
 §3.9): `on` when any incident that passes the tracking filters is within the
 **alert** radius (`coordinator.config.alert_radius_km`) — deliberately not
 the (larger) track radius, which only gates `geo_location` entities and the
-aggregate counters. `binary_sensor.high_risk` (§3.10, Pla Alfa) is Task 10's
-responsibility and is intentionally not implemented here.
+aggregate counters.
+
+Also implements `binary_sensor.bomberscat_high_risk` (§3.10, Pla Alfa,
+`HighRiskBinarySensor` below): `on` when `sensor.bomberscat_fire_risk`'s
+underlying `PERIL_M` is at or above the configured threshold. It is backed
+by the independent `PlaAlfaCoordinator` (see `pla_alfa.py`/`__init__.py`),
+not the Bombers coordinator that `BomberscatFireNearbyBinarySensor` below
+uses — the two entities' availability is fully decoupled.
 
 Device class (`SAFETY` vs `PROBLEM`): both HA binary sensor device classes
 share the exact `on`/`off` semantics we need (`on` = bad). We picked
@@ -51,9 +58,10 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import BomberscatConfigEntry
-from .const import DOMAIN
+from .const import CONF_HIGH_RISK_THRESHOLD, DEFAULT_HIGH_RISK_THRESHOLD, DOMAIN
 from .coordinator import BomberscatDataUpdateCoordinator, BomberscatState
 from .models import Incident
+from .pla_alfa import PlaAlfaCoordinator
 
 
 async def async_setup_entry(
@@ -62,7 +70,12 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up bomberscat binary sensors from a config entry."""
-    async_add_entities([BomberscatFireNearbyBinarySensor(entry)])
+    async_add_entities(
+        [
+            BomberscatFireNearbyBinarySensor(entry),
+            HighRiskBinarySensor(entry),
+        ]
+    )
 
 
 class BomberscatFireNearbyBinarySensor(
@@ -123,4 +136,61 @@ class BomberscatFireNearbyBinarySensor(
             "nearest_distance_km": round(self.coordinator.distance_km(nearest), 1),
             "nearest_municipi": nearest.municipi,
             "nearest_fase": nearest.fase.value,
+        }
+
+
+class HighRiskBinarySensor(CoordinatorEntity[PlaAlfaCoordinator], BinarySensorEntity):
+    """`binary_sensor.bomberscat_high_risk` (feature-spec §3.10, Task 10).
+
+    `on` iff Pla Alfa's `PERIL_M` for `zone.home`'s municipality is at or
+    above `options[CONF_HIGH_RISK_THRESHOLD]` (default 3 = "Alt", per
+    `DEFAULT_HIGH_RISK_THRESHOLD`). The threshold is read once at entity
+    construction time — consistent with `BomberscatRuntimeConfig.from_entry`
+    in coordinator.py, which does the same for the Bombers-side options —
+    since an options change reloads the whole config entry (see
+    `_async_update_listener` in `__init__.py`), rebuilding every entity
+    anyway.
+
+    Backed by `PlaAlfaCoordinator`: `is_on` is `None` (unknown/unavailable,
+    via `CoordinatorEntity`'s default `available =
+    coordinator.last_update_success`) whenever Pla Alfa has no data yet,
+    independent of the Bombers coordinator's own health.
+    """
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "high_risk"
+    _attr_device_class = BinarySensorDeviceClass.SAFETY
+
+    def __init__(self, entry: BomberscatConfigEntry) -> None:
+        bombers_coordinator: BomberscatDataUpdateCoordinator = entry.runtime_data
+        coordinator: PlaAlfaCoordinator = bombers_coordinator.pla_alfa
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_high_risk"
+        self._threshold = int(
+            entry.options.get(CONF_HIGH_RISK_THRESHOLD, DEFAULT_HIGH_RISK_THRESHOLD)
+        )
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name="Bombers de Catalunya",
+            manufacturer="Generalitat de Catalunya",
+            model="Incendis forestals",
+            entry_type=DeviceEntryType.SERVICE,
+        )
+
+    @property
+    def is_on(self) -> bool | None:
+        risk = self.coordinator.data
+        if risk is None:
+            return None
+        return risk.peril_m >= self._threshold
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        risk = self.coordinator.data
+        if risk is None:
+            return None
+        return {
+            "threshold": self._threshold,
+            "nivell_text": risk.nivell_text,
+            "municipi": risk.municipi,
         }
