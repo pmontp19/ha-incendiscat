@@ -23,10 +23,11 @@ _LOGGER = logging.getLogger(__name__)
 # the coordinator lives on the config entry itself, not hass.data[DOMAIN].
 type BomberscatConfigEntry = ConfigEntry[BomberscatDataUpdateCoordinator]
 
-# Platforms forwarded to on setup. Empty for now: sensor (T6/T12),
-# geo_location (T7) and binary_sensor (T8) each append their Platform here
-# once their module exists — do not add entries speculatively.
-PLATFORMS: tuple[Platform, ...] = ()
+PLATFORMS: tuple[Platform, ...] = (
+    Platform.BINARY_SENSOR,
+    Platform.GEO_LOCATION,
+    Platform.SENSOR,
+)
 
 __all__ = ["DOMAIN", "BomberscatConfigEntry"]
 

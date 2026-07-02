@@ -179,16 +179,16 @@ Notes:
 
 ### Sync incremental
 
+> **⚠️ Drift verificat en implementar (2026-07-02)**: `EditDate` **no és consultable** al servei real — `editFieldsInfo` el declara però desapareix silenciosament d'`outFields=*` i usar-lo a `where`/`orderByFields` retorna HTTP 400. El sync incremental es fa amb **`DATA_ACT`** (present a totes les files, també usat pel dedup). Nota addicional: el wrapper `properties.exceededTransferLimit` és absent del tot quan no s'excedeix el límit (no `false`).
+
 Per actualitzar només el canvi des de l'última lectura:
 
 ```
-?where=EditDate > TIMESTAMP '<última lectura ISO>'
-&orderByFields=EditDate ASC
+?where=DATA_ACT > TIMESTAMP '<última lectura ISO>'
+&orderByFields=DATA_ACT ASC
 &resultRecordCount=2000
 &resultOffset=0
 ```
-
-`EditDate` està indexat → ràpid.
 
 ---
 

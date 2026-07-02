@@ -86,7 +86,7 @@ Wrapper async mínim sobre el FeatureServer. Fa servir `aiohttp` directament (co
 ### Responsabilitats
 
 1. **Query paginada** — recórrer tot el dataset amb `resultOffset` fins que `exceededTransferLimit == false`.
-2. **Sync incremental** — si tenim `last_edit_date`, filtra per `EditDate > :last` i ordena ASC.
+2. **Sync incremental** — si tenim `last_data_act`, filtra per `DATA_ACT > :last` i ordena ASC. (**No** `EditDate`: no és consultable al servei real — HTTP 400; vegeu `01-data-sources.md` §2.)
 3. **Dedup per `ACT_NUM_ACTUACIO`** — la vista és un log d'snapshots (una actuació pot tenir 2+ files); ens quedem la fila amb `DATA_ACT` màxim com a estat actual (vegeu `01-data-sources.md` §2).
 4. **Conversió a dataclasses** — `Incident` amb camps forts.
 4. **Tolerància d'esquema** — camps nous/renomenats no trenquen res (usem `.get()`).
