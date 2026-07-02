@@ -1,0 +1,293 @@
+blueprint:
+  name: "Bombers de Catalunya — Notificació d'incendi"
+  description: >-
+    Envia una notificació push quan la integració Bombers de Catalunya
+    detecta un incendi (`bomberscat_fire_detected`), i opcionalment quan
+    un incendi es resol (`bomberscat_fire_resolved`) o canvia de fase
+    (`bomberscat_phase_change`). Permet filtrar per fase mínima, nombre de
+    vehicles i distància, triar quin mapa obre el botó "Obrir mapa" i marcar
+    la notificació com a crítica (salta el "no molestar" a iOS/Android).
+
+    Consulta `docs/03-feature-spec.md` §4 i §5 del repositori per als
+    payloads exactes dels events i l'especificació d'aquest blueprint.
+  domain: automation
+  source_url: https://github.com/pmontp19/ha-bomberscat/blob/main/blueprints/automation/bomberscat_fire_notification.yaml
+  homeassistant:
+    # `!input` dins de `action:`/`data:` i els blocs `if:`/`choose:` amb
+    # `variables:` per pas requereixen una versió prou recent de l'schema
+    # d'automations. 2024.10 és una fita conservadora (bastant per darrere
+    # de qualsevol instal·lació que ja pugui fer servir aquesta integració).
+    min_version: 2024.10.0
+  input:
+    notify_service:
+      name: Servei de notificació
+      description: >-
+        Acció de notificació a cridar, per exemple `notify.mobile_app_el_meu_mobil`
+        o `notify.notify` (grup de tots els dispositius mòbils). S'introdueix
+        com a text (no com a selector d'entitat) perquè `notify.*` són
+        serveis, no entitats.
+      default: notify.notify
+      selector:
+        text:
+    minimum_fase:
+      name: Fase mínima
+      description: >-
+        Notifica només si la fase de l'incendi és igual o més greu que
+        aquesta. Ordre de gravetat (de més a menys): Actiu > Estabilitzat >
+        Controlat > Extingit.
+      default: Actiu
+      selector:
+        select:
+          mode: dropdown
+          translation_key: minimum_fase
+          options:
+            - Actiu
+            - Estabilitzat
+            - Controlat
+            - Extingit
+    minimum_vehicles:
+      name: Vehicles mínims
+      description: >-
+        Notifica només si l'incendi té almenys aquest nombre de vehicles
+        assignats. Filtre de magnitud; no s'aplica als events de resolució
+        ni de canvi de fase (no porten aquesta dada al payload).
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 100
+          mode: box
+    maximum_distance:
+      name: Distància màxima (km)
+      description: >-
+        Distància màxima en km de casa per notificar. Amb 0 (per defecte)
+        es fa servir el radi d'alerta configurat a la integració
+        (`in_alert_radius` del payload de `bomberscat_fire_detected`) en
+        comptes d'un límit fix. Per als events de canvi de fase, un valor
+        de 0 vol dir "sense límit de distància" (el payload no inclou
+        `in_alert_radius`); per als de resolució no s'aplica cap filtre de
+        distància (el payload no porta ni distància ni coordenades).
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 200
+          unit_of_measurement: km
+          mode: box
+    critical_alert:
+      name: Alerta crítica
+      description: >-
+        Marca la notificació com a crítica perquè sigui audible fins i tot
+        amb el mode "no molestar" activat. A iOS cal tenir activat el
+        permís de "Critical Alerts" per a l'app de Home Assistant. A
+        Android cal haver creat prèviament (una sola vegada, des de l'app)
+        un canal de notificació anomenat `alarm_stream` amb importància
+        alta i so propi — un cop creat, Android no permet canviar-ne la
+        importància per codi.
+      default: false
+      selector:
+        boolean:
+    include_resolved:
+      name: Notifica resolucions
+      description: Envia també una notificació quan un incendi es resol (s'extingeix).
+      default: false
+      selector:
+        boolean:
+    include_phase_changes:
+      name: Notifica canvis de fase
+      description: Envia també una notificació quan un incendi canvia de fase.
+      default: false
+      selector:
+        boolean:
+    open_map_url:
+      name: Mapa del botó "Obrir mapa"
+      description: >-
+        Servei de mapes que obre el botó de la notificació. `bomberscat` fa
+        servir el visor oficial dels Bombers (únic disponible quan l'event
+        no porta coordenades, com als de resolució/canvi de fase);
+        `google_maps` i `osm` fan servir la latitud/longitud de l'incendi
+        (només disponible a `bomberscat_fire_detected`).
+      default: bomberscat
+      selector:
+        select:
+          mode: dropdown
+          translation_key: open_map_url
+          options:
+            - bomberscat
+            - google_maps
+            - osm
+
+# Múltiples incendis poden disparar events gairebé alhora; cada disparo es
+# processa de manera independent en comptes de cancel·lar l'anterior.
+mode: queued
+max: 10
+
+# Els disparadors d'un blueprint no es poden condicionar (no hi ha manera de
+# fer servir `!input include_resolved` dins d'un `trigger`), així que sempre
+# es dispara pels 3 events i el filtratge (booleans d'inclusió + fase +
+# vehicles + distància) es fa íntegrament dins de `actions` amb `choose`/`if`.
+triggers:
+  - trigger: event
+    event_type: bomberscat_fire_detected
+    id: detected
+  - trigger: event
+    event_type: bomberscat_fire_resolved
+    id: resolved
+  - trigger: event
+    event_type: bomberscat_phase_change
+    id: phase_change
+
+variables:
+  notify_service: !input notify_service
+  minimum_fase: !input minimum_fase
+  minimum_vehicles: !input minimum_vehicles
+  maximum_distance: !input maximum_distance
+  critical_alert: !input critical_alert
+  include_resolved: !input include_resolved
+  include_phase_changes: !input include_phase_changes
+  open_map_url: !input open_map_url
+  # Ordre de gravetat de fase (docs/04-architecture.md, models.py Fase._severity).
+  fase_severity:
+    Extingit: 0
+    Controlat: 1
+    Estabilitzat: 2
+    Actiu: 3
+  fase_emoji:
+    Actiu: "🔥"
+    Estabilitzat: "🟡"
+    Controlat: "🟢"
+    Extingit: "✅"
+  min_fase_severity: "{{ fase_severity.get(minimum_fase, 3) }}"
+  bombers_viewer_url: "https://experience.arcgis.com/experience/f6172fd2d6974bc0a8c51e3a6bc2a735"
+
+actions:
+  - choose:
+      # ---------------------------------------------------------------
+      # bomberscat_fire_detected — sempre avaluat (no té booleà d'inclusió)
+      # ---------------------------------------------------------------
+      - conditions: "{{ trigger.id == 'detected' }}"
+        sequence:
+          - variables:
+              d_fase: "{{ trigger.event.data.fase }}"
+              d_municipi: "{{ trigger.event.data.municipi }}"
+              d_vehicles: "{{ trigger.event.data.vehicles | int(0) }}"
+              d_distance_km: "{{ trigger.event.data.distance_km }}"
+              d_in_alert_radius: "{{ trigger.event.data.in_alert_radius }}"
+              d_tipus_desc: "{{ trigger.event.data.tipus_desc }}"
+              d_latitude: "{{ trigger.event.data.latitude }}"
+              d_longitude: "{{ trigger.event.data.longitude }}"
+              d_url: "{{ trigger.event.data.url }}"
+          - variables:
+              passes_fase: "{{ fase_severity.get(d_fase, 3) >= min_fase_severity }}"
+              passes_vehicles: "{{ d_vehicles >= (minimum_vehicles | int(0)) }}"
+              passes_distance: >-
+                {{ (maximum_distance | int(0)) == 0 and d_in_alert_radius
+                   or (maximum_distance | int(0)) > 0
+                      and d_distance_km <= (maximum_distance | int(0)) }}
+          - if:
+              - condition: template
+                value_template: "{{ passes_fase and passes_vehicles and passes_distance }}"
+            then:
+              - variables:
+                  map_url: >-
+                    {% if open_map_url == 'google_maps' %}
+                      https://www.google.com/maps?q={{ d_latitude }},{{ d_longitude }}
+                    {% elif open_map_url == 'osm' %}
+                      https://www.openstreetmap.org/?mlat={{ d_latitude }}&mlon={{ d_longitude }}#map=13/{{ d_latitude }}/{{ d_longitude }}
+                    {% else %}
+                      {{ d_url }}
+                    {% endif %}
+                  notify_title: >-
+                    {{ fase_emoji.get(d_fase, '🔥') }} Foc a {{ d_municipi }} ({{ d_distance_km }} km)
+                  notify_message: >-
+                    Fase: {{ d_fase }} · {{ d_vehicles }} vehicles · {{ d_tipus_desc }}
+              - variables:
+                  notify_data: >-
+                    {% set base = {'url': map_url | trim, 'actions': [{'action': 'URI', 'title': "Obrir mapa", 'uri': map_url | trim}]} %}
+                    {% if critical_alert %}
+                      {% set base = dict(base, push={'interruption-level': 'critical', 'sound': {'name': 'default', 'critical': 1, 'volume': 1.0}}, priority='high', ttl=0, channel='alarm_stream', importance='high') %}
+                    {% endif %}
+                    {{ base }}
+              - action: !input notify_service
+                data:
+                  title: "{{ notify_title | trim }}"
+                  message: "{{ notify_message | trim }}"
+                  data: "{{ notify_data }}"
+
+      # ---------------------------------------------------------------
+      # bomberscat_fire_resolved — nomes si include_resolved. El payload
+      # no porta fase/vehicles/distancia/coordenades, aixi que nomes es
+      # filtra pel booleà (docs/04-architecture.md §4.2).
+      # ---------------------------------------------------------------
+      - conditions: "{{ trigger.id == 'resolved' and include_resolved }}"
+        sequence:
+          - variables:
+              r_municipi: "{{ trigger.event.data.municipi }}"
+              r_final_fase: "{{ trigger.event.data.final_fase }}"
+              r_duration_min: "{{ trigger.event.data.duration_min }}"
+          - variables:
+              # Sense lat/lon a l'event: només el visor general de Bombers
+              # es pot oferir com a botó, independentment de `open_map_url`.
+              map_url: "{{ bombers_viewer_url }}"
+              notify_title: "✅ Incendi extingit a {{ r_municipi }}"
+              notify_message: >-
+                {% if r_duration_min is not none %}
+                  Fase final: {{ r_final_fase }} · Durada: {{ r_duration_min }} min
+                {% else %}
+                  Fase final: {{ r_final_fase }}
+                {% endif %}
+          - variables:
+              notify_data: >-
+                {% set base = {'url': map_url, 'actions': [{'action': 'URI', 'title': "Obrir mapa", 'uri': map_url}]} %}
+                {% if critical_alert %}
+                  {% set base = dict(base, push={'interruption-level': 'critical', 'sound': {'name': 'default', 'critical': 1, 'volume': 1.0}}, priority='high', ttl=0, channel='alarm_stream', importance='high') %}
+                {% endif %}
+                {{ base }}
+          - action: !input notify_service
+            data:
+              title: "{{ notify_title | trim }}"
+              message: "{{ notify_message | trim }}"
+              data: "{{ notify_data }}"
+
+      # ---------------------------------------------------------------
+      # bomberscat_phase_change — nomes si include_phase_changes. El
+      # payload porta distance_km pero no vehicles ni coordenades ni
+      # `in_alert_radius`, aixi que `maximum_distance = 0` es tracta com
+      # "sense límit" (no hi ha in_alert_radius amb què comparar) en
+      # comptes d'usar el radi d'alerta.
+      # ---------------------------------------------------------------
+      - conditions: "{{ trigger.id == 'phase_change' and include_phase_changes }}"
+        sequence:
+          - variables:
+              p_municipi: "{{ trigger.event.data.municipi }}"
+              p_old_fase: "{{ trigger.event.data.old_fase }}"
+              p_new_fase: "{{ trigger.event.data.new_fase }}"
+              p_distance_km: "{{ trigger.event.data.distance_km }}"
+          - variables:
+              passes_fase: "{{ fase_severity.get(p_new_fase, 3) >= min_fase_severity }}"
+              passes_distance: >-
+                {{ (maximum_distance | int(0)) == 0
+                   or p_distance_km <= (maximum_distance | int(0)) }}
+          - if:
+              - condition: template
+                value_template: "{{ passes_fase and passes_distance }}"
+            then:
+              - variables:
+                  # Sense lat/lon a l'event: només el visor general de
+                  # Bombers es pot oferir com a botó.
+                  map_url: "{{ bombers_viewer_url }}"
+                  notify_title: >-
+                    {{ fase_emoji.get(p_new_fase, '🔥') }} Canvi de fase a {{ p_municipi }}: {{ p_old_fase }} → {{ p_new_fase }}
+                  notify_message: "Distància: {{ p_distance_km }} km"
+              - variables:
+                  notify_data: >-
+                    {% set base = {'url': map_url, 'actions': [{'action': 'URI', 'title': "Obrir mapa", 'uri': map_url}]} %}
+                    {% if critical_alert %}
+                      {% set base = dict(base, push={'interruption-level': 'critical', 'sound': {'name': 'default', 'critical': 1, 'volume': 1.0}}, priority='high', ttl=0, channel='alarm_stream', importance='high') %}
+                    {% endif %}
+                    {{ base }}
+              - action: !input notify_service
+                data:
+                  title: "{{ notify_title | trim }}"
+                  message: "{{ notify_message | trim }}"
+                  data: "{{ notify_data }}"
