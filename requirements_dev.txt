@@ -7,9 +7,9 @@
 # The integration itself has no runtime requirements (manifest.json:
 # requirements: []) — these packages are only needed for local dev/CI.
 
-pytest
-pytest-cov
-pytest-homeassistant-custom-component
-homeassistant
-ruff
-aioresponses
+pytest==9.0.0
+pytest-cov==7.0.0
+pytest-homeassistant-custom-component==0.13.316
+homeassistant==2026.2.3
+ruff==0.15.20
+aioresponses==0.7.9

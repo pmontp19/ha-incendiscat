@@ -54,12 +54,12 @@ T16 README + release HACS ← (tot)
 
 ### Task 3: Client ArcGIS dels Bombers ⚠️ risc alt
 
-**Descripció:** `arcgis.py` amb `fetch_incidents()` (§3 architecture): paginació amb `resultOffset` fins `exceededTransferLimit == false`, sync incremental per `EditDate`, retries amb backoff (1s/2s/4s) per timeout/5xx, sense retry per 4xx. Capturar fixtures reals del FeatureServer (`featureserver_sample.json`, `_empty.json`, `_paginated.json`).
+**Descripció:** `arcgis.py` amb `fetch_incidents()` (§3 architecture): paginació amb `resultOffset` fins `exceededTransferLimit == false`, sync incremental per `DATA_ACT`, retries amb backoff (1s/2s/4s) per timeout/5xx, sense retry per 4xx. Capturar fixtures reals del FeatureServer (`featureserver_sample.json`, `_empty.json`, `_paginated.json`).
 
 **Criteris d'acceptació:**
 - [ ] Query real contra el FeatureServer retorna `list[Incident]` amb coordenades WGS84 (`outSR=4326`)
 - [ ] **Dedup per `ACT_NUM_ACTUACIO`**: la vista és un log d'snapshots — amb una fixture de 2 files de la mateixa actuació, guanya la de `DATA_ACT` màxim
-- [ ] Paginació verificada amb mock de 2+ pàgines; sync incremental genera el `where=EditDate > ...` correcte
+- [ ] Paginació verificada amb mock de 2+ pàgines; sync incremental genera el `where=DATA_ACT > ...` correcte
 - [ ] Errors 5xx → 3 retries; 4xx → excepció immediata
 
 **Verificació:** `pytest tests/test_arcgis.py` verd; script manual d'una query live documentat al PR.

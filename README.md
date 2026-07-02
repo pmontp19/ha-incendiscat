@@ -228,6 +228,12 @@ Detalls tècnics complets (schemas, glossaris, endpoints) a [`docs/01-data-sourc
 - Després de 3 errors seguits del mateix tipus, es dispara l'event `bomberscat_service_degraded` i s'obre una incidència de reparació (repair issue) a Home Assistant amb enllaç a [GitHub Issues](https://github.com/pmontp19/ha-bomberscat/issues).
 - Les dades ja carregades es mantenen (no s'esborren) fins que el servei torna.
 
+## Seguretat i dades
+
+- Les coordenades de la ubicació configurada (`zone.home` o la que triïs) només s'envien als endpoints de *point-in-polygon* del Pla Alfa (Agents Rurals) — és el disseny esperat, cal per determinar el municipi/comarca i el nivell de risc.
+- Les entitats de diagnòstic redacten `latitude`/`longitude` (i altres camps identificatius de la configuració) abans d'exportar-se.
+- Camps com `municipi` o `tipus_desc` provenen d'un servei extern no oficial i s'han de tractar com a text no fiable: no els renderitzis amb `allow_html: true` en targetes personalitzades (p.ex. Markdown card).
+
 ## Desenvolupament
 
 ```bash
