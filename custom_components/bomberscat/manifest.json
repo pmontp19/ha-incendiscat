@@ -1,5 +1,7 @@
 {
-  "codeowners": ["@pmontp19"],
+  "codeowners": [
+    "@pmontp19"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/pmontp19/ha-bomberscat",
   "domain": "bomberscat",
@@ -9,5 +11,5 @@
   "name": "Bombers de Catalunya",
   "requirements": [],
   "single_config_entry": true,
-  "version": "0.1.0"
+  "version": "1.0.0"
 }
