@@ -1,0 +1,14 @@
+# Development dependencies for ha-bomberscat.
+#
+# Set up the dev environment with:
+#   uv venv --python 3.13 .venv
+#   uv pip install --python .venv/bin/python -r requirements_dev.txt
+#
+# The integration itself has no runtime requirements (manifest.json:
+# requirements: []) — these packages are only needed for local dev/CI.
+
+pytest
+pytest-cov
+pytest-homeassistant-custom-component
+homeassistant
+ruff

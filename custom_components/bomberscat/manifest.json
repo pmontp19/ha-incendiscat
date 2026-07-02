@@ -1,0 +1,12 @@
+{
+  "codeowners": ["@pmontp19"],
+  "config_flow": true,
+  "documentation": "https://github.com/pmontp19/ha-bomberscat",
+  "domain": "bomberscat",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/pmontp19/ha-bomberscat/issues",
+  "name": "Bombers de Catalunya",
+  "requirements": [],
+  "version": "0.1.0"
+}
