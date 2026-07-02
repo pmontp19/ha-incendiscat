@@ -75,17 +75,17 @@
   "selector": {
     "subtipus": {
       "options": {
-        "VF": "Forestal (VF)",
-        "VA": "Agrícola (VA)",
-        "VU": "Urbana (VU)"
+        "vf": "Forestal (VF)",
+        "va": "Agrícola (VA)",
+        "vu": "Urbana (VU)"
       }
     },
     "active_phases": {
       "options": {
-        "Actiu": "Actiu",
-        "Estabilitzat": "Estabilitzat",
-        "Controlat": "Controlat",
-        "Extingit": "Extingit"
+        "actiu": "Actiu",
+        "estabilitzat": "Estabilitzat",
+        "controlat": "Controlat",
+        "extingit": "Extingit"
       }
     }
   },

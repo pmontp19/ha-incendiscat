@@ -70,12 +70,18 @@ from .const import (
 
 ERROR_ALERT_GT_TRACK = "alert_gt_track"
 
-# Selector options for the two multi-select fields (§2 feature-spec). Kept as
-# plain strings (not translated) — they match the raw `TAL_COD_ALARMA2` /
-# `COM_FASE` values used everywhere else (coordinator filters, geo_location
-# attributes), with the user-facing label supplied by translations/*.json.
-_SUBTIPUS_OPTIONS = ["VF", "VA", "VU"]
-_ACTIVE_PHASES_OPTIONS = ["Actiu", "Estabilitzat", "Controlat", "Extingit"]
+# Selector options for the two multi-select fields (§2 feature-spec).
+# Lowercase slugs: with `translation_key` set, the option *value* doubles as
+# the translation key hassfest validates against `selector.<key>.options.*`
+# in strings.json, which must match `[a-z0-9-_]+` — so these can no longer be
+# the raw (mixed-case) `TAL_COD_ALARMA2` / `COM_FASE` domain values. Those
+# domain values ("VF"/"Actiu"/...) are still used everywhere else (events,
+# geo_location attributes, models.Tipus/Fase); `BomberscatRuntimeConfig
+# .from_entry` (coordinator.py) is the single place that maps a stored slug
+# back to its domain value. The user-facing label is supplied by
+# translations/*.json, keyed by the same lowercase slug.
+_SUBTIPUS_OPTIONS = ["vf", "va", "vu"]
+_ACTIVE_PHASES_OPTIONS = ["actiu", "estabilitzat", "controlat", "extingit"]
 
 
 def _build_location_schema() -> vol.Schema:

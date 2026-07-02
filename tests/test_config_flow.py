@@ -187,10 +187,17 @@ async def test_second_config_attempt_aborts(hass: HomeAssistant) -> None:
 
 
 async def test_options_flow_shows_current_values(hass: HomeAssistant) -> None:
-    """Opening the options flow pre-fills the form with the entry's options."""
+    """Opening the options flow pre-fills the form with the entry's options.
+
+    Stored values are the (new) lowercase slugs -- this is the round-trip
+    the selector options must support: whatever was written by a previous
+    submission (or, before this test, `DEFAULT_SUBTIPUS`/
+    `DEFAULT_ACTIVE_PHASES`) comes back out as the exact suggested value, so
+    the SelectSelector shows it as selected.
+    """
     entry = make_config_entry(
         options={
-            CONF_SUBTIPUS: ["VF", "VA"],
+            CONF_SUBTIPUS: ["vf", "va"],
             CONF_ACTIVE_PHASES: DEFAULT_ACTIVE_PHASES,
             CONF_SCAN_INTERVAL: 10,
             CONF_MIN_VEHICLES: 2,
@@ -209,7 +216,7 @@ async def test_options_flow_shows_current_values(hass: HomeAssistant) -> None:
         for key in schema
         if key.description
     }
-    assert suggested[CONF_SUBTIPUS] == ["VF", "VA"]
+    assert suggested[CONF_SUBTIPUS] == ["vf", "va"]
     assert suggested[CONF_SCAN_INTERVAL] == 10
     assert suggested[CONF_MIN_VEHICLES] == 2
     assert suggested[CONF_HIGH_RISK_THRESHOLD] == 1

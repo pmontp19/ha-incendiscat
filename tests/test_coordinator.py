@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from custom_components.bomberscat.arcgis import ArcgisClientError
 from custom_components.bomberscat.const import (
+    CONF_ACTIVE_PHASES,
     CONF_MIN_VEHICLES,
     CONF_SUBTIPUS,
     EVENT_FIRE_DETECTED,
@@ -141,6 +142,26 @@ async def test_subtipus_filter_excludes_non_matching_type(
 async def test_subtipus_filter_can_be_widened_via_options(
     hass: HomeAssistant,
 ) -> None:
+    """New (lowercase-slug) stored form: `["vf", "vu"]`."""
+    urban_fire = make_incident("1", tipus=Tipus.URBANA)
+    entry = make_config_entry(options={CONF_SUBTIPUS: ["vf", "vu"]})
+    coordinator = _coordinator(hass, entry)
+    with _patched_fetch([urban_fire]):
+        await coordinator.async_refresh()
+
+    assert "1" in coordinator.data.incidents
+
+
+async def test_subtipus_filter_widened_via_legacy_capitalized_options(
+    hass: HomeAssistant,
+) -> None:
+    """Legacy (pre-lowercase-slug) stored form: `["VF", "VU"]`.
+
+    Entries created before options started storing lowercase slugs have
+    the domain value itself in `entry.options` -- `BomberscatRuntimeConfig
+    .from_entry`'s normalization must still resolve these to the same
+    domain set as the new form, so old entries keep working unmigrated.
+    """
     urban_fire = make_incident("1", tipus=Tipus.URBANA)
     entry = make_config_entry(options={CONF_SUBTIPUS: ["VF", "VU"]})
     coordinator = _coordinator(hass, entry)
@@ -461,3 +482,58 @@ async def test_incident_without_act_num_is_skipped(
         await coordinator.async_refresh()
 
     assert coordinator.data.incidents == {}
+
+
+# ---------------------------------------------------------------------------
+# BomberscatRuntimeConfig.from_entry: stored-slug -> domain-value normalization
+# ---------------------------------------------------------------------------
+#
+# `entry.options[CONF_SUBTIPUS]`/`[CONF_ACTIVE_PHASES]` store lowercase slugs
+# ("vf", "actiu", ...) because the config-flow SelectSelector's option value
+# doubles as a hassfest-validated translation key. `from_entry` must resolve
+# both that new form and the legacy (pre-change) capitalized-domain-value
+# form back to the same `Tipus`/`Fase` domain set, since that is what every
+# downstream filter (`_passes_filters`, `sensor.py`, `binary_sensor.py`)
+# compares against.
+
+
+def test_from_entry_normalizes_new_lowercase_slug_options() -> None:
+    entry = make_config_entry(
+        options={
+            CONF_SUBTIPUS: ["vf", "vu"],
+            CONF_ACTIVE_PHASES: ["actiu", "controlat"],
+        }
+    )
+    cfg = BomberscatRuntimeConfig.from_entry(entry)
+
+    assert cfg.subtipus == {"VF", "VU"}
+    assert cfg.active_phases == {"Actiu", "Controlat"}
+
+
+def test_from_entry_normalizes_legacy_capitalized_options() -> None:
+    """Entries created before options started storing lowercase slugs kept
+    the domain value itself (e.g. "VF", "Actiu") in `entry.options` --
+    `from_entry` must still resolve these to the same domain set as the new
+    lowercase-slug form, so old entries keep filtering correctly unmigrated.
+    """
+    entry = make_config_entry(
+        options={
+            CONF_SUBTIPUS: ["VF", "VU"],
+            CONF_ACTIVE_PHASES: ["Actiu", "Controlat"],
+        }
+    )
+    cfg = BomberscatRuntimeConfig.from_entry(entry)
+
+    assert cfg.subtipus == {"VF", "VU"}
+    assert cfg.active_phases == {"Actiu", "Controlat"}
+
+
+def test_from_entry_uses_defaults_when_options_unset() -> None:
+    """Fresh installs / entries with no options at all fall back to
+    `const.DEFAULT_SUBTIPUS`/`DEFAULT_ACTIVE_PHASES` (stored, lowercase-slug
+    form) and normalize them the same way as explicit options."""
+    entry = make_config_entry()
+    cfg = BomberscatRuntimeConfig.from_entry(entry)
+
+    assert cfg.subtipus == {"VF"}
+    assert cfg.active_phases == {"Actiu", "Estabilitzat"}

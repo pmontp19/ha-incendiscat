@@ -97,11 +97,20 @@ DEFAULT_SCAN_INTERVAL_MIN = 5
 MIN_SCAN_INTERVAL_MIN = 1
 MAX_SCAN_INTERVAL_MIN = 60
 
-# Subtipus filter (TAL_COD_ALARMA2): VF (forestal) / VA (agrícola) / VU (urbana).
-DEFAULT_SUBTIPUS = ["VF"]
+# Subtipus filter (TAL_COD_ALARMA2): vf (forestal) / va (agrícola) / vu (urbana).
+# Stored (entry.options) form is a lowercase slug — hassfest requires
+# selector option values (which double as translation keys here) to match
+# `[a-z0-9-_]+`. The domain values used everywhere else (models.Tipus,
+# events, geo_location attributes) stay uppercase ("VF"/"VA"/"VU");
+# `BomberscatRuntimeConfig.from_entry` (coordinator.py) is the single place
+# that maps stored slugs back to domain values.
+DEFAULT_SUBTIPUS = ["vf"]
 
 # Phases (COM_FASE) considered "active" for tracking/counting purposes.
-DEFAULT_ACTIVE_PHASES = ["Actiu", "Estabilitzat"]
+# Stored (entry.options) form is a lowercase slug — see DEFAULT_SUBTIPUS's
+# comment above; the domain values (models.Fase) stay capitalized
+# ("Actiu"/"Estabilitzat"/...).
+DEFAULT_ACTIVE_PHASES = ["actiu", "estabilitzat"]
 
 # Minimum number of assigned vehicles (ACT_NUM_VEH) to consider an incident.
 DEFAULT_MIN_VEHICLES = 0

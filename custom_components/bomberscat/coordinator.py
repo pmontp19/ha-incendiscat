@@ -122,7 +122,7 @@ from .const import (
     GITHUB_ISSUES_URL,
 )
 from .geo import haversine_km
-from .models import Fase, Incident
+from .models import Fase, Incident, Tipus
 
 if TYPE_CHECKING:
     import aiohttp
@@ -170,6 +170,42 @@ def last_update_status(state: BomberscatState) -> str:
     return f"error_{label}"
 
 
+# `entry.options[CONF_SUBTIPUS]`/`[CONF_ACTIVE_PHASES]` store lowercase
+# slugs ("vf", "actiu", ...): the config-flow SelectSelector's option value
+# doubles as a hassfest-validated translation key (`[a-z0-9-_]+`), which
+# rules out the mixed-case domain values used everywhere else. These maps
+# translate a stored slug back to its domain value (`Tipus`/`Fase` member
+# value) via a case-insensitive lookup, built once from the enums so it can
+# never drift out of sync with them. Because the lookup key is lowercased
+# before matching, this transparently also accepts *legacy* entries created
+# before this change, which stored the domain value itself (e.g. "VF",
+# "Actiu") -- `"VF".lower()` and `"vf"` both hit the same map entry.
+_TIPUS_BY_SLUG: dict[str, str] = {t.value.lower(): t.value for t in Tipus}
+_FASE_BY_SLUG: dict[str, str] = {f.value.lower(): f.value for f in Fase}
+
+
+def _normalize_stored_options(
+    raw: Any, slug_by_value: dict[str, str]
+) -> frozenset[str]:
+    """Map a stored options list (new lowercase slugs or legacy domain
+    values) to the canonical domain-value set used by every filter
+    downstream (`_passes_filters`, `sensor.py`, `binary_sensor.py` all
+    compare against `Fase.value`/`Tipus.value`, e.g. "Actiu"/"VF").
+
+    An entry not found in `slug_by_value` (a stale/manually-edited option)
+    passes through unchanged rather than being dropped -- it simply will not
+    match any real incident's `fase`/`tipus`, which is the same
+    fail-open-to-"no match" behavior `_passes_filters` already has for any
+    other misconfigured filter.
+    """
+    return frozenset(
+        slug_by_value.get(value.strip().lower(), value)
+        if isinstance(value, str)
+        else value
+        for value in raw
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class BomberscatRuntimeConfig:
     """Resolved tracking configuration for one config entry.
@@ -178,7 +214,9 @@ class BomberscatRuntimeConfig:
     1); the filters/polling-interval come from `entry.options` with
     fallbacks to the `const.py` defaults. Options are read with
     `.get(..., DEFAULT_*)` so entry.options set by the options flow and
-    unset fresh installs both work.
+    unset fresh installs both work. `subtipus`/`active_phases` are
+    normalized from their stored (lowercase-slug) form to domain values by
+    `_normalize_stored_options` -- see that function's docstring.
     """
 
     home_lat: float
@@ -200,9 +238,11 @@ class BomberscatRuntimeConfig:
             home_lon=data[CONF_LONGITUDE],
             track_radius_km=data[CONF_TRACK_RADIUS],
             alert_radius_km=data[CONF_ALERT_RADIUS],
-            subtipus=frozenset(options.get(CONF_SUBTIPUS, DEFAULT_SUBTIPUS)),
-            active_phases=frozenset(
-                options.get(CONF_ACTIVE_PHASES, DEFAULT_ACTIVE_PHASES)
+            subtipus=_normalize_stored_options(
+                options.get(CONF_SUBTIPUS, DEFAULT_SUBTIPUS), _TIPUS_BY_SLUG
+            ),
+            active_phases=_normalize_stored_options(
+                options.get(CONF_ACTIVE_PHASES, DEFAULT_ACTIVE_PHASES), _FASE_BY_SLUG
             ),
             min_vehicles=int(options.get(CONF_MIN_VEHICLES, DEFAULT_MIN_VEHICLES)),
             scan_interval_min=int(
