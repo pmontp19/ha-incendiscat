@@ -40,6 +40,23 @@ DO_HISTORIC_ACTUAL_URL = (
     "https://analisi.transparenciacatalunya.cat/resource/9r29-e8ha.json"
 )
 
+# Official Bombers incident viewer (ArcGIS Experience Builder app). There is
+# no documented per-incident deep link — the viewer is a single-page map app
+# with no incident-id query parameter, so events/entities all point at the
+# viewer root and let the user locate the fire on the map themselves
+# (docs/03-feature-spec.md §4, §5).
+BOMBERS_VIEWER_URL = (
+    "https://experience.arcgis.com/experience/f6172fd2d6974bc0a8c51e3a6bc2a735"
+)
+
+# ---------------------------------------------------------------------------
+# Events fired on hass.bus (docs/03-feature-spec.md §4)
+# ---------------------------------------------------------------------------
+
+EVENT_FIRE_DETECTED = "bomberscat_fire_detected"
+EVENT_FIRE_RESOLVED = "bomberscat_fire_resolved"
+EVENT_PHASE_CHANGE = "bomberscat_phase_change"
+
 # ---------------------------------------------------------------------------
 # Config flow / options keys
 # ---------------------------------------------------------------------------
