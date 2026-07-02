@@ -5,7 +5,7 @@ rules:
     status: exempt
     comment: "No service actions exposed (events on hass.bus + blueprint is the chosen UX pattern)."
   appropriate_polling: done
-  brands: todo
+  brands: done
   common_modules: done
   config_flow: done
   config_flow_test_coverage: done

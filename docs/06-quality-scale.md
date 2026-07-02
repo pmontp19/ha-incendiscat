@@ -29,11 +29,11 @@ Quan una regla és `exempt`, **sempre** portem un comentari d'una línia explica
 
 | Tier | Done | Todo | Exempt | Total |
 | :---: | ---: | ---: | ---: | ---: |
-| 🥉 Bronze | 13 | 3 | 4 | 20 |
+| 🥉 Bronze | 14 | 2 | 4 | 20 |
 | 🥈 Silver | 7 | 1 | 2 | 10 |
 | 🥇 Gold | 11 | 4 | 6 | 21 |
 | 🏆 Platinum | 2 | 1 | 0 | 3 |
-| **Total** | **33** | **9** | **12** | **54** |
+| **Total** | **34** | **8** | **12** | **54** |
 
 > **Recompte verificat 2026-07-02** contra codi real (183 tests, 98% coverage). Els `todo` no bloquegen v0.1.0 — són backlog de qualitat.
 
@@ -54,12 +54,12 @@ Quan una regla és `exempt`, **sempre** portem un comentari d'una línia explica
 | `has_entity_name` | A `_attr_has_entity_name = True` |
 | `runtime_data` | `entry.runtime_data` + alias tipat (no `hass.data`) |
 | `test_before_setup` | `async_config_entry_first_refresh()` al setup |
+| `brands` | `icon.png` 256×256 a `custom_components/incendiscat/brand/` (Brands Proxy API, HA ≥2026.3 — el repo `home-assistant/brands` ja no accepta noves integracions custom) |
 
 ### ⏳ Pendents (tots barats, ferm per v0.1.0)
 
 | Regla | Esforç | Què |
 | --- | ---: | --- |
-| `brands` | M | `icon.png` 256×256 + `logo.png` per la marca. Necessari per aparèixer a HACS amb thumbnail. |
 | `test_before_configure` | S | Al config flow, fer un GET petit al FeatureServer (`?resultRecordCount=1`) per validar abans de guardar l'entry |
 | `unique_config_entry` | XS | `async_abort_if_unique_entry_configured()` al config flow |
 | `docs_high_level_description` | S | Secció inicial del README explicant què és Incendis Catalunya |
@@ -175,11 +175,11 @@ Quan una regla és `exempt`, **sempre** portem un comentari d'una línia explica
 | Core modules (`arcgis`/`coordinator`/`geo`/`models`) | ≥92% |
 | Platforms | ≥93% |
 
-**9 todos reals** (els altres 17 es van completar sense tocar el YAML):
+**8 todos reals** (els altres 18 es van completar sense tocar el YAML):
 
 | Prioritat | Regles | Esforç |
 | :--- | --- | ---: |
-| **v0.1.0 (pre-release)** | `brands`, `test_before_configure`, `unique_config_entry`, `parallel_updates` | XS |
+| **v0.1.0 (pre-release)** | `test_before_configure`, `unique_config_entry`, `parallel_updates` | XS |
 | **v0.2.0 (Gold UX)** | `entity_disabled_by_default`, `icon_translations`, `exception_translations`, `docs_known_limitations`, `docs_troubleshooting` | S-M |
 | **v0.3.0 (Platinum)** | `strict_typing` | L (mypy CI) |
 
@@ -190,7 +190,7 @@ Quan una regla és `exempt`, **sempre** portem un comentari d'una línia explica
 ## Priorització per versió (KISS)
 
 ### v0.1.0 — tot Bronze + Silver crític
-- **Obligatori**: `brands`, `test_before_configure`, `unique_config_entry`, `config_entry_unloading`, `entity_unavailable`, `log_when_unavailable`, `parallel_updates`, `docs_*` bàsics
+- **Obligatori**: `test_before_configure`, `unique_config_entry`, `config_entry_unloading`, `entity_unavailable`, `log_when_unavailable`, `parallel_updates`, `docs_*` bàsics (`brands` ✅ fet)
 - **Coverage**: 95% core (`arcgis`/`coordinator`/`geo`/`models`), 70% platforms
 - Marquem Bronze + Silver com a `done`
 
@@ -214,7 +214,8 @@ Quan una regla és `exempt`, **sempre** portem un comentari d'una línia explica
 | Local discovery | No tenim res a descobrir a la xarxa |
 | 95% coverage global | Els platforms UI tenen poc valor de test; millor 95% al core i 70% als platforms |
 | Platinum al 100% sense PR a core | Inversió de mypy--strict per tot té poc ROI si no es revisa un core maintainer |
-| Brands elaborats (logo SVG professional) | Amb `icon.png` i `logo.png` simple amb el `mdi:fire` re-esticat n'hi ha prou per HACS |
+| Brands elaborats (logo SVG professional) | Amb `icon.png` simple n'hi ha prou per HACS; si `logo.png` seria idèntic a `icon.png`, no cal pujar-lo (fallback automàtic) |
+| PR al repo `home-assistant/brands` | Congelat per a integracions custom noves — es fa servir el `brand/` local via Brands Proxy API (HA ≥2026.3) |
 
 ---
 

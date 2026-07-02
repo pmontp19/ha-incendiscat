@@ -25,10 +25,12 @@ ha-incendiscat/
 │       ├── strings.json             # noms UI del config_flow
 │       ├── services.yaml            # serveis exposem (p.ex. incendiscat.refresh)
 │       ├── icons.py                 # mdi per fase/tipus
-│       └── translations/
-│           ├── ca.json
-│           ├── es.json
-│           └── en.json
+│       ├── translations/
+│       │   ├── ca.json
+│       │   ├── es.json
+│       │   └── en.json
+│       └── brand/                   # Brands Proxy API (HA ≥2026.3), no repo extern
+│           └── icon.png             # 256×256, quadrat, fons transparent
 ├── blueprints/
 │   └── automation/
 │       └── incendiscat_fire_notification.yaml
