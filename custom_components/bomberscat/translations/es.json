@@ -1,0 +1,140 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Bombers de Catalunya",
+        "description": "Defina la ubicación a vigilar y los dos radios de seguimiento. Puede arrastrar el marcador y redimensionar el círculo en el mapa; ambos toman por defecto la ubicación de casa de Home Assistant.",
+        "data": {
+          "location": "[%key:common::config_flow::data::location%]",
+          "alert_radius": "Radio de alerta (km)"
+        },
+        "data_description": {
+          "location": "El círculo del mapa define el radio de seguimiento: los incendios dentro de él se siguen (contadores, entidades geo_location). Por defecto, 100 km.",
+          "alert_radius": "Los incendios dentro de este radio más pequeño activan el sensor binario \"incendio cercano\" y los eventos. No puede ser mayor que el radio de seguimiento."
+        }
+      },
+      "filters": {
+        "title": "Filtros y sondeo",
+        "description": "Elija qué incendios seguir y con qué frecuencia comprobar actualizaciones.",
+        "data": {
+          "subtipus": "Subtipos de incidente",
+          "active_phases": "Fases activas",
+          "scan_interval": "Intervalo de sondeo (min)",
+          "min_vehicles": "Vehículos mínimos"
+        },
+        "data_description": {
+          "subtipus": "Solo se siguen los incendios de estos subtipos. Por defecto: solo incendios forestales.",
+          "active_phases": "Fases contadas como \"activas\" para los contadores y el sensor de incendio cercano.",
+          "scan_interval": "Cada cuántos minutos se consulta el canal en directo de los Bombers. Rango 1-60.",
+          "min_vehicles": "Ignora los incidentes con menos de este número de vehículos asignados. 0 desactiva este filtro."
+        }
+      },
+      "reconfigure": {
+        "title": "Bombers de Catalunya",
+        "description": "Mueva la ubicación vigilada o cambie los radios de seguimiento. Puede arrastrar el marcador y redimensionar el círculo en el mapa.",
+        "data": {
+          "location": "[%key:common::config_flow::data::location%]",
+          "alert_radius": "Radio de alerta (km)"
+        },
+        "data_description": {
+          "location": "El círculo del mapa define el radio de seguimiento: los incendios dentro de él se siguen (contadores, entidades geo_location).",
+          "alert_radius": "Los incendios dentro de este radio más pequeño activan el sensor binario \"incendio cercano\" y los eventos. No puede ser mayor que el radio de seguimiento."
+        }
+      }
+    },
+    "error": {
+      "alert_gt_track": "El radio de alerta no puede ser mayor que el radio de seguimiento."
+    },
+    "abort": {
+      "single_instance_allowed": "[%key:common::config_flow::abort::single_instance_allowed%]",
+      "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opciones de Bombers de Catalunya",
+        "description": "Cambie los filtros de incidentes, el intervalo de sondeo y el umbral de riesgo alto.",
+        "data": {
+          "subtipus": "Subtipos de incidente",
+          "active_phases": "Fases activas",
+          "scan_interval": "Intervalo de sondeo (min)",
+          "min_vehicles": "Vehículos mínimos",
+          "high_risk_threshold": "Umbral de riesgo alto"
+        },
+        "data_description": {
+          "subtipus": "Solo se siguen los incendios de estos subtipos. Por defecto: solo incendios forestales.",
+          "active_phases": "Fases contadas como \"activas\" para los contadores y el sensor de incendio cercano.",
+          "scan_interval": "Cada cuántos minutos se consulta el canal en directo de los Bombers. Rango 1-60.",
+          "min_vehicles": "Ignora los incidentes con menos de este número de vehículos asignados. 0 desactiva este filtro.",
+          "high_risk_threshold": "Nivel de riesgo del Pla Alfa (0-4) a partir del cual se activa binary_sensor.high_risk."
+        }
+      }
+    }
+  },
+  "selector": {
+    "subtipus": {
+      "options": {
+        "VF": "Forestal (VF)",
+        "VA": "Agrícola (VA)",
+        "VU": "Urbana (VU)"
+      }
+    },
+    "active_phases": {
+      "options": {
+        "Actiu": "Activo",
+        "Estabilitzat": "Estabilizado",
+        "Controlat": "Controlado",
+        "Extingit": "Extinguido"
+      }
+    }
+  },
+  "issues": {
+    "service_degraded": {
+      "title": "Bombers de Catalunya no puede conectar con el FeatureServer",
+      "description": "La integración ha fallado al consultar el FeatureServer de los Bombers varias veces seguidas con un error que sugiere que su dirección o esquema ha cambiado: {error}. Los datos de incendios pueden quedar desactualizados hasta que esto se resuelva. Abra una incidencia en el repositorio de GitHub de la integración con estos detalles."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "active_fires": {
+        "name": "Incendios activos"
+      },
+      "nearest_fire_distance": {
+        "name": "Distancia al incendio más cercano"
+      },
+      "nearest_fire_municipi": {
+        "name": "Municipio del incendio más cercano"
+      },
+      "fires_per_fase": {
+        "name": "Incendios por fase"
+      },
+      "fires_per_tipus": {
+        "name": "Incendios por tipo"
+      },
+      "total_vehicles": {
+        "name": "Vehículos desplegados"
+      },
+      "fire_risk": {
+        "name": "Riesgo de incendio (Pla Alfa)"
+      },
+      "last_update": {
+        "name": "Última actualización"
+      },
+      "last_update_status": {
+        "name": "Estado de la última actualización"
+      }
+    },
+    "binary_sensor": {
+      "fire_nearby": {
+        "name": "Incendio cercano"
+      },
+      "high_risk": {
+        "name": "Riesgo alto de incendio"
+      },
+      "service_connected": {
+        "name": "Servicio conectado"
+      }
+    }
+  }
+}

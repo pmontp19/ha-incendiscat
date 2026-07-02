@@ -17,12 +17,11 @@ from homeassistant.core import HomeAssistant
 
 from .conftest import HOME_LAT, HOME_LON, make_config_entry, make_incident
 
-# Entity naming: `_attr_translation_key = "fire_nearby"` has no matching
-# `translations/en.json` "entity" section yet (Task 14 adds translations for
-# all platforms at once), so with `has_entity_name = True` and no
-# `_attr_name`, Home Assistant falls back to the device_class name
-# ("Safety") for the entity's friendly name / object_id in the meantime.
-ENTITY_ID = "binary_sensor.bombers_de_catalunya_safety"
+# Entity naming: `_attr_translation_key = "fire_nearby"` resolves via
+# `translations/en.json`'s "entity.binary_sensor.fire_nearby.name" (Task 14)
+# to "Fire nearby", combined with the device name ("Bombers de Catalunya")
+# through `has_entity_name = True` into this object_id.
+ENTITY_ID = "binary_sensor.bombers_de_catalunya_fire_nearby"
 
 # ~11 km north of home: inside a 30 km alert radius, inside a 100 km track radius.
 INSIDE_ALERT_LAT = HOME_LAT + 0.1

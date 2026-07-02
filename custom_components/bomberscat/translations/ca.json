@@ -1,0 +1,140 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Bombers de Catalunya",
+        "description": "Definiu la ubicació a vigilar i els dos radis de seguiment. Podeu arrossegar el marcador i redimensionar el cercle al mapa; tots dos prenen per defecte la ubicació de casa d'Home Assistant.",
+        "data": {
+          "location": "[%key:common::config_flow::data::location%]",
+          "alert_radius": "Radi d'alerta (km)"
+        },
+        "data_description": {
+          "location": "El cercle del mapa defineix el radi de seguiment: els incendis que hi són dins es fan seguir (comptadors, entitats geo_location). Per defecte, 100 km.",
+          "alert_radius": "Els incendis dins d'aquest radi més petit activen el sensor binari \"incendi a prop\" i els esdeveniments. No pot ser més gran que el radi de seguiment."
+        }
+      },
+      "filters": {
+        "title": "Filtres i sondeig",
+        "description": "Trieu quins incendis voleu seguir i cada quant es comproven actualitzacions.",
+        "data": {
+          "subtipus": "Subtipus d'incident",
+          "active_phases": "Fases actives",
+          "scan_interval": "Interval de sondeig (min)",
+          "min_vehicles": "Vehicles mínims"
+        },
+        "data_description": {
+          "subtipus": "Només se segueixen els incendis d'aquests subtipus. Per defecte: només incendis forestals.",
+          "active_phases": "Fases comptades com a \"actives\" pels comptadors i pel sensor d'incendi a prop.",
+          "scan_interval": "Cada quants minuts es consulta el canal en directe dels Bombers. Interval 1-60.",
+          "min_vehicles": "Ignora els incidents amb menys d'aquest nombre de vehicles assignats. 0 desactiva aquest filtre."
+        }
+      },
+      "reconfigure": {
+        "title": "Bombers de Catalunya",
+        "description": "Moveu la ubicació vigilada o canvieu els radis de seguiment. Podeu arrossegar el marcador i redimensionar el cercle al mapa.",
+        "data": {
+          "location": "[%key:common::config_flow::data::location%]",
+          "alert_radius": "Radi d'alerta (km)"
+        },
+        "data_description": {
+          "location": "El cercle del mapa defineix el radi de seguiment: els incendis que hi són dins es fan seguir (comptadors, entitats geo_location).",
+          "alert_radius": "Els incendis dins d'aquest radi més petit activen el sensor binari \"incendi a prop\" i els esdeveniments. No pot ser més gran que el radi de seguiment."
+        }
+      }
+    },
+    "error": {
+      "alert_gt_track": "El radi d'alerta no pot ser més gran que el radi de seguiment."
+    },
+    "abort": {
+      "single_instance_allowed": "[%key:common::config_flow::abort::single_instance_allowed%]",
+      "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opcions de Bombers de Catalunya",
+        "description": "Canvieu els filtres d'incidents, l'interval de sondeig i el llindar de risc alt.",
+        "data": {
+          "subtipus": "Subtipus d'incident",
+          "active_phases": "Fases actives",
+          "scan_interval": "Interval de sondeig (min)",
+          "min_vehicles": "Vehicles mínims",
+          "high_risk_threshold": "Llindar de risc alt"
+        },
+        "data_description": {
+          "subtipus": "Només se segueixen els incendis d'aquests subtipus. Per defecte: només incendis forestals.",
+          "active_phases": "Fases comptades com a \"actives\" pels comptadors i pel sensor d'incendi a prop.",
+          "scan_interval": "Cada quants minuts es consulta el canal en directe dels Bombers. Interval 1-60.",
+          "min_vehicles": "Ignora els incidents amb menys d'aquest nombre de vehicles assignats. 0 desactiva aquest filtre.",
+          "high_risk_threshold": "Nivell de risc del Pla Alfa (0-4) a partir del qual s'activa binary_sensor.high_risk."
+        }
+      }
+    }
+  },
+  "selector": {
+    "subtipus": {
+      "options": {
+        "VF": "Forestal (VF)",
+        "VA": "Agrícola (VA)",
+        "VU": "Urbana (VU)"
+      }
+    },
+    "active_phases": {
+      "options": {
+        "Actiu": "Actiu",
+        "Estabilitzat": "Estabilitzat",
+        "Controlat": "Controlat",
+        "Extingit": "Extingit"
+      }
+    }
+  },
+  "issues": {
+    "service_degraded": {
+      "title": "Bombers de Catalunya no pot connectar amb el FeatureServer",
+      "description": "La integració ha fallat en consultar el FeatureServer dels Bombers diverses vegades seguides amb un error que suggereix que l'adreça o l'esquema han canviat: {error}. Les dades d'incendis poden quedar desactualitzades fins que això es resolgui. Obriu una incidència al repositori de GitHub de la integració amb aquests detalls."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "active_fires": {
+        "name": "Incendis actius"
+      },
+      "nearest_fire_distance": {
+        "name": "Distància a l'incendi més proper"
+      },
+      "nearest_fire_municipi": {
+        "name": "Municipi de l'incendi més proper"
+      },
+      "fires_per_fase": {
+        "name": "Incendis per fase"
+      },
+      "fires_per_tipus": {
+        "name": "Incendis per tipus"
+      },
+      "total_vehicles": {
+        "name": "Vehicles desplegats"
+      },
+      "fire_risk": {
+        "name": "Risc d'incendi (Pla Alfa)"
+      },
+      "last_update": {
+        "name": "Darrera actualització"
+      },
+      "last_update_status": {
+        "name": "Estat de la darrera actualització"
+      }
+    },
+    "binary_sensor": {
+      "fire_nearby": {
+        "name": "Incendi a prop"
+      },
+      "high_risk": {
+        "name": "Risc alt d'incendi"
+      },
+      "service_connected": {
+        "name": "Servei connectat"
+      }
+    }
+  }
+}

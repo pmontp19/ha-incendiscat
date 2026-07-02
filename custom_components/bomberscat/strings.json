@@ -94,5 +94,47 @@
       "title": "Bombers de Catalunya can't reach the FeatureServer",
       "description": "The integration has failed to query the Bombers FeatureServer several times in a row with an error suggesting its address or schema has changed: {error}. Wildfire data may be stale until this is fixed. Please open an issue on the integration's GitHub repository with these details."
     }
+  },
+  "entity": {
+    "sensor": {
+      "active_fires": {
+        "name": "Active fires"
+      },
+      "nearest_fire_distance": {
+        "name": "Nearest fire distance"
+      },
+      "nearest_fire_municipi": {
+        "name": "Nearest fire municipality"
+      },
+      "fires_per_fase": {
+        "name": "Fires per phase"
+      },
+      "fires_per_tipus": {
+        "name": "Fires per type"
+      },
+      "total_vehicles": {
+        "name": "Deployed vehicles"
+      },
+      "fire_risk": {
+        "name": "Fire risk (Pla Alfa)"
+      },
+      "last_update": {
+        "name": "Last update"
+      },
+      "last_update_status": {
+        "name": "Last update status"
+      }
+    },
+    "binary_sensor": {
+      "fire_nearby": {
+        "name": "Fire nearby"
+      },
+      "high_risk": {
+        "name": "High fire risk"
+      },
+      "service_connected": {
+        "name": "Service connected"
+      }
+    }
   }
 }
