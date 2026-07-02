@@ -177,15 +177,19 @@ Notes:
 - Timestamps en **ms des d'època UTC**.
 - El visor públic aplica un filtre addicional `EditDate = Avui` per mostrar només els del dia; **el FeatureServer mateix no filtra per data**, per tant tenim **històric complet**.
 
-### Sync incremental
+### Estratègia de sincronització
 
-> **⚠️ Drift verificat en implementar (2026-07-02)**: `EditDate` **no és consultable** al servei real — `editFieldsInfo` el declara però desapareix silenciosament d'`outFields=*` i usar-lo a `where`/`orderByFields` retorna HTTP 400. El sync incremental es fa amb **`DATA_ACT`** (present a totes les files, també usat pel dedup). Nota addicional: el wrapper `properties.exceededTransferLimit` és absent del tot quan no s'excedeix el límit (no `false`).
+> **⚠️ Drift verificat en implementar (2026-07-02)**: `EditDate` **no és consultable** al servei real — `editFieldsInfo` el declara però desapareix silenciosament d'`outFields=*` i usar-lo a `where`/`orderByFields` retorna HTTP 400. Nota addicional: el wrapper `properties.exceededTransferLimit` és absent del tot quan no s'excedeix el límit (no `false`).
 
-Per actualitzar només el canvi des de l'última lectura:
+> **⚠️ Finestra de retenció verificada en servei real (2026-07-02)**: la vista aplica una finestra de retenció d'uns **~4 dies sobre `DATA_ACT`**: una fila la `DATA_ACT` de la qual envelleix més enllà d'aquesta finestra **desapareix completament de la vista**, sense passar per cap estat de tancament previ (el `DATA_ACT` mínim observat a la vista és ~3.85 dies, mentre que hi ha incidents amb data d'inici de fa 8+ dies — les seves files antigues ja no hi són). **Conseqüència pràctica**: un sync incremental (`where=DATA_ACT > <última lectura>`) mai pot observar una baixa — un `act_num` que deixa d'aparèixer simplement es perd de la finestra incremental per sempre, sense cap senyal de "resolt". A més, `ACT_DAT_FI` és `null` al 100% de les files observades (inservible per detectar tancament); el tancament s'expressa únicament amb `COM_FASE = 'Extingit'` (estat terminal). Els literals `TIMESTAMP '...'` i els epochs numèrics del servei són **UTC**, confirmat empíricament.
+>
+> **Decisió (2026-07-02)**: donat que el dataset és petit (desenes de files, sempre una sola pàgina ≤ 2000), cada cicle fa un **fetch complet** (`where=1=1`, `since=None`) i dedup (§2 més amunt), i el coordinador **reconcilia** tractant el resultat com l'estat actual complet: qualsevol `act_num` que estava sent seguit i no apareix en el fetch s'ha esvaït de la vista i es poda (disparant `bomberscat_fire_resolved` si encara no s'havia disparat en passar a `Extingit`). Vegeu `custom_components/bomberscat/coordinator.py` (`_prune_vanished`) per la implementació.
+
+Query per obtenir el dataset complet cada cicle:
 
 ```
-?where=DATA_ACT > TIMESTAMP '<última lectura ISO>'
-&orderByFields=DATA_ACT ASC
+?where=1=1
+&outFields=*
 &resultRecordCount=2000
 &resultOffset=0
 ```

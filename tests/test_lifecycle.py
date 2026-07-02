@@ -106,10 +106,15 @@ async def test_extingit_incident_kept_during_grace_period(
     assert "1" in coordinator.data.incidents
     assert "1" in coordinator.data.resolved_at
 
-    # Not yet past the grace period: still present on subsequent polls even
-    # with nothing new coming from the feed.
+    # Not yet past the grace period: still present on subsequent polls, as
+    # long as the source view still reports the row unchanged. Under
+    # full-fetch semantics (every cycle fetches the *whole* current view,
+    # see coordinator.py's module docstring) a genuinely empty fetch would
+    # mean "the row vanished" and prune it immediately -- so this poll
+    # re-fetches `extinguished` to exercise the timer-based grace-period
+    # path specifically, not the vanish-prune path.
     clock.advance(minutes=59)
-    with _patched_fetch([]):
+    with _patched_fetch([extinguished]):
         await coordinator.async_refresh()
     assert "1" in coordinator.data.incidents
 
@@ -126,8 +131,11 @@ async def test_extingit_incident_removed_after_grace_period(
         await coordinator.async_refresh()
         await coordinator.async_refresh()
 
+    # Re-fetch the unchanged Extingit row (see comment in the "kept during
+    # grace period" test above): removal here must come from the elapsed
+    # grace timer, not from the row being absent from the fetch.
     clock.advance(minutes=61)
-    with _patched_fetch([]):
+    with _patched_fetch([extinguished]):
         await coordinator.async_refresh()
 
     assert "1" not in coordinator.data.incidents
@@ -154,8 +162,13 @@ async def test_reactivated_incident_clears_stale_grace_timer(
 
     assert "1" not in coordinator.data.resolved_at
 
+    # `resolved_at` is already clear at this point, so the vanish-prune path
+    # doesn't apply here; re-fetch the reactivated row unchanged (full-fetch
+    # semantics: a genuinely empty result would mean the row vanished and
+    # prune it, defeating what this test is checking) to confirm the
+    # cleared timer keeps it tracked indefinitely.
     clock.advance(minutes=61)
-    with _patched_fetch([]):
+    with _patched_fetch([reactivated]):
         await coordinator.async_refresh()
 
     assert "1" in coordinator.data.incidents
@@ -169,13 +182,16 @@ async def test_grace_period_is_per_incident(
     active2 = make_incident("2", fase=Fase.ACTIU)
     extinguished1 = make_incident("1", fase=Fase.EXTINGIT)
 
-    with _patched_fetch([], [active1, active2], [extinguished1]):
+    # "2" is re-fetched unchanged in every subsequent cycle (full-fetch
+    # semantics: an empty/missing row means "vanished from the view", not
+    # "no news") so that only "1"'s Extingit grace timer is under test here.
+    with _patched_fetch([], [active1, active2], [extinguished1, active2]):
         await coordinator.async_refresh()
         await coordinator.async_refresh()
         await coordinator.async_refresh()
 
     clock.advance(minutes=61)
-    with _patched_fetch([]):
+    with _patched_fetch([extinguished1, active2]):
         await coordinator.async_refresh()
 
     assert coordinator.data.incidents == {"2": active2}

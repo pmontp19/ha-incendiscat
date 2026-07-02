@@ -241,9 +241,16 @@ async def test_total_vehicles_sums_tracked_incidents(hass: HomeAssistant) -> Non
 
 
 async def test_state_updates_after_second_refresh(hass: HomeAssistant) -> None:
+    """Second fetch keeps "1" (unchanged) and adds "2": under full-fetch
+    reconciliation (coordinator.py's module docstring -- every cycle fetches
+    the whole current view and prunes act_nums absent from it) an act_num
+    missing from a later batch is treated as vanished/resolved rather than
+    "unchanged since last cursor", so "1" must still be present here for
+    this test to actually exercise "a second incident got added", not a
+    prune."""
     first = make_incident("1", fase=Fase.ACTIU, vehicles=1)
     second_new = make_incident("2", fase=Fase.ACTIU, vehicles=4)
-    with _patched_fetch([first], [second_new]):
+    with _patched_fetch([first], [first, second_new]):
         entry = await _setup(hass)
         assert _state(hass, entry, "active_fires").state == "1"
         assert _state(hass, entry, "total_vehicles").state == "1"

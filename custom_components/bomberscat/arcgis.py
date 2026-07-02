@@ -6,7 +6,16 @@ docs/04-architecture.md §2 — `requirements: []`). Responsibilities:
 1. Paginated query — walk the whole dataset via `resultOffset` until
    `exceededTransferLimit` is false.
 2. Incremental sync — when `since` is given, filter to rows updated after
-   that timestamp and fetch them in chronological order.
+   that timestamp and fetch them in chronological order. `coordinator.py`
+   no longer calls this with a real cursor: the view enforces a rolling
+   ~4-day retention window keyed on `DATA_ACT` (verified live, 2026-07-02),
+   so a row that ages out simply vanishes rather than being marked closed —
+   an incremental cursor can never observe that as a deletion. The
+   coordinator instead does a full fetch (`since=None`) every cycle and
+   reconciles by pruning act_nums absent from the result (see
+   `coordinator.py`'s module docstring and `_prune_vanished`). `since` is
+   kept working here (and tested) since it is harmless and may still be
+   useful for a larger dataset in the future.
 3. De-dup — the view is an append-only snapshot log: one
    `ACT_NUM_ACTUACIO` can have 2+ rows (see docs/01-data-sources.md §2). We
    collapse to one row per incident, keeping the one with the highest

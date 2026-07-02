@@ -18,6 +18,7 @@ from custom_components.bomberscat.arcgis import ArcgisClientError
 from custom_components.bomberscat.const import (
     CONF_MIN_VEHICLES,
     CONF_SUBTIPUS,
+    EVENT_FIRE_DETECTED,
     EVENT_FIRE_RESOLVED,
 )
 from custom_components.bomberscat.coordinator import (
@@ -26,10 +27,12 @@ from custom_components.bomberscat.coordinator import (
     _apply_incident,
     _cleanup_resolved,
     _passes_filters,
+    _prune_vanished,
     _should_track,
 )
 from custom_components.bomberscat.models import Fase, Tipus
 from homeassistant.core import HomeAssistant
+from pytest_homeassistant_custom_component.common import async_capture_events
 
 from .conftest import HOME_LAT, HOME_LON, make_config_entry, make_incident
 
@@ -85,9 +88,15 @@ async def test_second_cycle_updates_existing_incident(hass: HomeAssistant) -> No
     assert coordinator.data.incidents["1"].vehicles == 5
 
 
-async def test_second_cycle_adds_second_incident_keeps_first(
+async def test_second_cycle_missing_first_incident_is_pruned_not_kept(
     hass: HomeAssistant,
 ) -> None:
+    """Deliberately changed under full-fetch semantics (see module
+    docstring): each cycle's `fetched` batch is treated as the *complete*
+    current view, so an act_num absent from it (here "1", on the second
+    fetch) has vanished from the source and gets resolved/pruned rather
+    than assumed unchanged. Only "2" (present in the second fetch) survives.
+    """
     inc1 = make_incident("1")
     inc2 = make_incident("2")
     coordinator = _coordinator(hass)
@@ -95,7 +104,7 @@ async def test_second_cycle_adds_second_incident_keeps_first(
         await coordinator.async_refresh()
         await coordinator.async_refresh()
 
-    assert set(coordinator.data.incidents) == {"1", "2"}
+    assert set(coordinator.data.incidents) == {"2"}
 
 
 async def test_incident_removed_when_phase_leaves_active_set(
@@ -232,7 +241,7 @@ async def test_recovers_after_fetch_error(hass: HomeAssistant) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Incremental sync (`since`)
+# Full fetch every cycle (`since` is always None)
 # ---------------------------------------------------------------------------
 
 
@@ -251,17 +260,138 @@ async def test_distance_km_reflects_updated_coordinates_across_cycles(
     assert coordinator.distance_km(far) > 1000
 
 
-async def test_incremental_since_passed_correctly(hass: HomeAssistant) -> None:
+async def test_fetch_called_with_since_none_every_cycle(hass: HomeAssistant) -> None:
+    """The view enforces a ~4-day retention window keyed on `DATA_ACT`
+    (verified live, 2026-07-02): a row that ages out simply vanishes, so an
+    incremental `since` cursor can never observe a deletion. We therefore
+    fetch the whole dataset (`since=None`) every cycle and reconcile by
+    pruning act_nums absent from the result (see `_prune_vanished`)."""
     first = make_incident("1")
     coordinator = _coordinator(hass)
 
-    mock_fetch = AsyncMock(side_effect=[[first], []])
+    mock_fetch = AsyncMock(side_effect=[[first], [first]])
     with patch("custom_components.bomberscat.coordinator.fetch_incidents", mock_fetch):
         await coordinator.async_refresh()
         assert mock_fetch.call_args_list[0].kwargs["since"] is None
 
         await coordinator.async_refresh()
-        assert mock_fetch.call_args_list[1].kwargs["since"] == first.data_act
+        assert mock_fetch.call_args_list[1].kwargs["since"] is None
+
+
+# ---------------------------------------------------------------------------
+# Full-fetch reconciliation: pruning incidents absent from the fetched batch
+# ---------------------------------------------------------------------------
+
+
+async def test_active_incident_absent_from_next_fetch_is_resolved_and_pruned(
+    hass: HomeAssistant,
+) -> None:
+    """An act_num that was tracked and simply stops appearing in a full
+    fetch has vanished from the source view (retention window, or any other
+    reason) -- there is no other signal we will ever get that it is gone.
+    It must be resolved (using its last-known fase) and removed."""
+    resolved = async_capture_events(hass, EVENT_FIRE_RESOLVED)
+    active = make_incident("1", fase=Fase.ACTIU)
+    coordinator = _coordinator(hass)
+
+    with _patched_fetch([active], []):
+        await coordinator.async_refresh()
+        assert "1" in coordinator.data.incidents
+        await coordinator.async_refresh()
+
+    assert coordinator.data.incidents == {}
+    assert len(resolved) == 1
+    assert resolved[0].data["act_num"] == "1"
+    assert resolved[0].data["final_fase"] == "Actiu"
+
+
+async def test_extingit_in_grace_period_absent_from_fetch_is_pruned_once(
+    hass: HomeAssistant,
+) -> None:
+    """An Extingit incident sitting out its removal grace period already
+    fired `bomberscat_fire_resolved` when it turned Extingit. If it then
+    vanishes from a full fetch (e.g. it aged out of the retention window
+    before the grace period elapsed), it must be pruned WITHOUT firing a
+    second `bomberscat_fire_resolved`."""
+    resolved = async_capture_events(hass, EVENT_FIRE_RESOLVED)
+    active = make_incident("1", fase=Fase.ACTIU)
+    extinguished = make_incident("1", fase=Fase.EXTINGIT)
+    coordinator = _coordinator(hass)
+
+    with _patched_fetch([active], [extinguished], []):
+        await coordinator.async_refresh()
+        await coordinator.async_refresh()
+        assert "1" in coordinator.data.resolved_at
+        await coordinator.async_refresh()
+
+    assert coordinator.data.incidents == {}
+    assert coordinator.data.resolved_at == {}
+    assert len(resolved) == 1  # only the Actiu -> Extingit transition, not the vanish
+
+
+async def test_incident_reappearing_after_vanishing_fires_detected_again(
+    hass: HomeAssistant,
+) -> None:
+    """Chosen semantics for the reappear edge case (transient service
+    flakiness, or a genuinely reopened act_num): once an act_num is pruned
+    for being absent from a full fetch, the coordinator has no memory that
+    it ever existed. If it reappears later it is treated as brand new, so
+    `bomberscat_fire_detected` fires again. This is the simplest option that
+    is still correct -- suppressing it would mean carrying "ghost" state
+    forward indefinitely, exactly what full-fetch pruning exists to avoid.
+    """
+    detected = async_capture_events(hass, EVENT_FIRE_DETECTED)
+    inc = make_incident("1", fase=Fase.ACTIU)
+    coordinator = _coordinator(hass)
+
+    with _patched_fetch([inc], [], [inc]):
+        await coordinator.async_refresh()  # baseline (suppressed, first refresh)
+        await coordinator.async_refresh()  # vanished -> resolved + pruned
+        await coordinator.async_refresh()  # reappears -> detected again
+
+    assert len(detected) == 1
+    assert "1" in coordinator.data.incidents
+
+
+def test_prune_vanished_removes_absent_act_nums_and_resolves_active_ones() -> None:
+    base_incidents = {
+        "1": make_incident("1", fase=Fase.ACTIU),
+        "2": make_incident("2", fase=Fase.EXTINGIT),
+    }
+    incidents = dict(base_incidents)
+    resolved_at = {"2": datetime.now(UTC)}
+
+    events = _prune_vanished(
+        base_incidents,
+        fetched_act_nums=set(),
+        incidents=incidents,
+        resolved_at=resolved_at,
+        now=datetime.now(UTC),
+    )
+
+    assert incidents == {}
+    assert resolved_at == {}
+    # "1" was still active and not yet resolved -> gets a resolved event;
+    # "2" already fired resolved when it turned Extingit -> no duplicate.
+    assert [e[0] for e in events] == [EVENT_FIRE_RESOLVED]
+    assert events[0][1]["act_num"] == "1"
+
+
+def test_prune_vanished_keeps_act_nums_still_present_in_fetch() -> None:
+    base_incidents = {"1": make_incident("1", fase=Fase.ACTIU)}
+    incidents = dict(base_incidents)
+    resolved_at: dict[str, datetime] = {}
+
+    events = _prune_vanished(
+        base_incidents,
+        fetched_act_nums={"1"},
+        incidents=incidents,
+        resolved_at=resolved_at,
+        now=datetime.now(UTC),
+    )
+
+    assert incidents == {"1": base_incidents["1"]}
+    assert events == []
 
 
 # ---------------------------------------------------------------------------

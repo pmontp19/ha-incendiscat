@@ -16,6 +16,30 @@ fetched rows against that copy while building the *new* `incidents` dict.
 The new dict becomes next cycle's "previous" automatically. This is strictly
 less state to keep in sync and cannot drift.
 
+Sync strategy (deviation from docs/04-architecture.md's incremental-sync
+sketch, confirmed via live-service investigation 2026-07-02): the Bombers
+FeatureServer view enforces a rolling ~4-day retention window keyed on
+`DATA_ACT` — a row whose latest `DATA_ACT` ages out of that window vanishes
+from the view *entirely*, it is not marked closed first. `ACT_DAT_FI` is
+`null` on 100% of observed rows (useless for detecting closure); closure is
+instead expressed as `COM_FASE == "Extingit"`, a terminal state. Combined,
+this means an incremental `since=<last DATA_ACT>` query can *never* observe
+a deletion: an act_num that stops being returned just silently drops out of
+the incremental window forever, and the old "carry forward whatever we last
+saw" design would keep a tracked incident (and its `geo_location` entity)
+alive indefinitely, never firing `bomberscat_fire_resolved`.
+
+Given the dataset is tiny (tens of rows, comfortably one page), we instead
+fetch the *entire* current view every cycle (`fetch_incidents(session,
+since=None)`) and treat it as ground truth: any act_num that was tracked
+last cycle but is absent from this cycle's fetch has vanished from the
+source and is pruned via `_prune_vanished` (resolving it first, unless it
+had already been resolved when it turned `Extingit` — see that function's
+docstring). `fetch_incidents`'s `since` parameter still exists and is still
+tested in arcgis.py, it is simply never passed a real cursor from here
+any more. TIMESTAMP literals/epochs from the service are UTC — the existing
+timezone handling in arcgis.py is correct and untouched by this change.
+
 Error-handling semantics (docs/05-implementation-plan.md Task 5): on a fetch
 failure we raise `UpdateFailed`. Home Assistant's `DataUpdateCoordinator`
 only overwrites `self.data` *after* `_async_update_data` returns
@@ -218,7 +242,6 @@ class BomberscatState:
 
     incidents: dict[str, Incident] = field(default_factory=dict)
     resolved_at: dict[str, datetime] = field(default_factory=dict)
-    last_data_act: datetime | None = None
     last_success: datetime | None = None
     last_error: str | None = None
     last_error_kind: str | None = None
@@ -377,6 +400,42 @@ def _apply_incident(
     return events
 
 
+def _prune_vanished(
+    base_incidents: dict[str, Incident],
+    fetched_act_nums: set[str],
+    incidents: dict[str, Incident],
+    resolved_at: dict[str, datetime],
+    now: datetime,
+) -> list[tuple[str, dict[str, Any]]]:
+    """Prune tracked incidents absent from a full fetch, in place.
+
+    Every cycle fetches the *entire* current view (see the module
+    docstring's "Sync strategy" section): an act_num that was tracked last
+    cycle (`base_incidents`) but is not present in this cycle's fetch
+    (`fetched_act_nums`) has vanished from the source view. That is the only
+    delete signal this API can ever give us -- there is no future cycle in
+    which we would learn more.
+
+    An incident already sitting out its removal grace period (present in
+    `resolved_at`) already fired `bomberscat_fire_resolved` when it turned
+    `Extingit`; if it then vanishes (e.g. it aged out of the ~4-day
+    `DATA_ACT` retention window before the grace period elapsed) it is just
+    removed, without a second `bomberscat_fire_resolved`. Anything else that
+    vanishes while still tracked is resolved now, using its last-known fase.
+    """
+    events: list[tuple[str, dict[str, Any]]] = []
+    vanished = [
+        act_num for act_num in base_incidents if act_num not in fetched_act_nums
+    ]
+    for act_num in vanished:
+        inc = base_incidents[act_num]
+        already_resolved = resolved_at.pop(act_num, None) is not None
+        incidents.pop(act_num, None)
+        if not already_resolved:
+            events.append((EVENT_FIRE_RESOLVED, _fire_resolved_payload(inc, now)))
+    return events
+
+
 def _cleanup_resolved(
     incidents: dict[str, Incident],
     resolved_at: dict[str, datetime],
@@ -447,10 +506,12 @@ class BomberscatDataUpdateCoordinator(DataUpdateCoordinator[BomberscatState]):
         previous = self.data
         is_first_refresh = previous is None
         cfg = self.config
-        since = previous.last_data_act if previous else None
 
         try:
-            fetched = await fetch_incidents(self._session, since=since)
+            # Always a full fetch (since=None): see the module docstring's
+            # "Sync strategy" section for why an incremental cursor can
+            # never observe a deletion against this particular view.
+            fetched = await fetch_incidents(self._session, since=None)
         except ArcgisClientError as err:
             if previous is not None:
                 # Mutate in place: self.data keeps this same object (HA does
@@ -483,9 +544,11 @@ class BomberscatDataUpdateCoordinator(DataUpdateCoordinator[BomberscatState]):
         now = utcnow()
         events: list[tuple[str, dict[str, Any]]] = []
 
+        fetched_act_nums: set[str] = set()
         for inc in fetched:
             if not inc.act_num:
                 continue
+            fetched_act_nums.add(inc.act_num)
             events.extend(
                 _apply_incident(
                     inc,
@@ -498,14 +561,17 @@ class BomberscatDataUpdateCoordinator(DataUpdateCoordinator[BomberscatState]):
                 )
             )
 
-        _cleanup_resolved(incidents, resolved_at, self._resolved_grace_minutes, now)
+        # Tracked act_nums absent from this cycle's (full) fetch have
+        # vanished from the source view -- reconcile them now, since an
+        # incremental cursor could never observe this (see module
+        # docstring).
+        events.extend(
+            _prune_vanished(
+                base_incidents, fetched_act_nums, incidents, resolved_at, now
+            )
+        )
 
-        last_data_act = previous.last_data_act if previous else None
-        for inc in fetched:
-            if inc.data_act is not None and (
-                last_data_act is None or inc.data_act > last_data_act
-            ):
-                last_data_act = inc.data_act
+        _cleanup_resolved(incidents, resolved_at, self._resolved_grace_minutes, now)
 
         if not is_first_refresh:
             for event_type, payload in events:
@@ -517,7 +583,6 @@ class BomberscatDataUpdateCoordinator(DataUpdateCoordinator[BomberscatState]):
         return BomberscatState(
             incidents=incidents,
             resolved_at=resolved_at,
-            last_data_act=last_data_act,
             last_success=now,
             last_error=None,
             last_error_kind=None,
