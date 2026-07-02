@@ -86,7 +86,7 @@ def _truncate_body(body: str) -> str:
 class ArcgisClientError(Exception):
     """Raised when the ArcGIS FeatureServer request fails unrecoverably.
 
-    `status`/`kind` (Task 13, docs/04-architecture.md §9) let callers
+    `status`/`kind` (docs/04-architecture.md §9) let callers
     classify a failure without parsing the message string — used by
     `coordinator.py` to (a) derive `sensor.last_update_status` and (b) count
     consecutive schema/URL-change-signature failures towards

@@ -23,16 +23,15 @@ _LOGGER = logging.getLogger(__name__)
 # entry.runtime_data alias (docs/04-architecture.md §5, "runtime-data" rule):
 # the coordinator lives on the config entry itself, not hass.data[DOMAIN].
 #
-# Task 10 runtime_data strategy: rather than reshaping `runtime_data` into a
+# runtime_data strategy: rather than reshaping `runtime_data` into a
 # 2-coordinator container (which would ripple into every existing reader —
-# sensor.py/binary_sensor.py/geo_location.py and 4+ test files, none of
-# which this task owns), we keep `entry.runtime_data` exactly as-is (the
-# Bombers coordinator) and attach the Pla Alfa coordinator to it as a plain
-# instance attribute, `coordinator.pla_alfa`, set once in
-# `async_setup_entry` below before entities are created. This is the
-# "smallest diff" option docs/05-implementation-plan.md Task 10 explicitly
-# allows: `BomberscatDataUpdateCoordinator` is a regular (non-slotted)
-# class, so this is a normal, if untyped-on-the-class, attribute — sensor.py
+# sensor.py/binary_sensor.py/geo_location.py and 4+ test files), we keep
+# `entry.runtime_data` exactly as-is (the Bombers coordinator) and attach
+# the Pla Alfa coordinator to it as a plain instance attribute,
+# `coordinator.pla_alfa`, set once in `async_setup_entry` below before
+# entities are created. This is the "smallest diff" option:
+# `BomberscatDataUpdateCoordinator` is a regular (non-slotted) class, so
+# this is a normal, if untyped-on-the-class, attribute — sensor.py
 # /binary_sensor.py read it as `entry.runtime_data.pla_alfa`.
 type BomberscatConfigEntry = ConfigEntry[BomberscatDataUpdateCoordinator]
 
@@ -51,9 +50,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: BomberscatConfigEntry) -
     `async_config_entry_first_refresh()` runs the first poll synchronously
     and raises `ConfigEntryNotReady` on failure (network error, FeatureServer
     down, ...), which is exactly the "fail setup cleanly, let HA retry
-    later" behavior Task 5 asks for — we do not need to catch anything here.
+    later" behavior expected — we do not need to catch anything here.
 
-    The Pla Alfa coordinator (Task 10) is set up the same way, *except* a
+    The Pla Alfa coordinator is set up the same way, *except* a
     failed first refresh must not abort the whole entry: fire monitoring is
     the integration's core value and Pla Alfa is a best-effort bonus, so we
     catch `ConfigEntryNotReady` from it, log, and continue — `fire_risk`/
@@ -91,7 +90,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: BomberscatConfigEntry) -
 async def _async_update_listener(
     hass: HomeAssistant, entry: BomberscatConfigEntry
 ) -> None:
-    """Reload the entry when options change (options flow lands in T11)."""
+    """Reload the entry when options change."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 

@@ -1,5 +1,5 @@
-"""Binary sensor platform for bomberscat (Task 8: `fire_nearby`; Task 10:
-`high_risk`; Task 13: `service_connected`).
+"""Binary sensor platform for bomberscat (`fire_nearby`, `high_risk`,
+`service_connected`).
 
 Implements `binary_sensor.bomberscat_fire_nearby` (docs/03-feature-spec.md
 §3.9): `on` when any incident that passes the tracking filters is within the
@@ -24,10 +24,10 @@ device class HA's own smoke/gas/CO binary sensors use, which is the closest
 existing precedent for a fire-adjacent condition. It also nudges dashboards
 towards the shield-style icon instead of the generic alert-triangle one.
 
-Grace-period interaction (docs/04-architecture.md §5, Task 5): the
+Grace-period interaction (docs/04-architecture.md §5): the
 coordinator keeps a just-`Extingit` incident in `state.incidents` for
 `resolved_grace_minutes` after it stops being active, purely so the
-`geo_location` entity (Task 7) doesn't flicker away instantly. That grace
+`geo_location` entity doesn't flicker away instantly. That grace
 period is a UI/lifecycle nicety for the per-incident entity, not a signal
 that the fire is still a threat. `fire_nearby` therefore filters
 `coordinator.data.incidents` down to phases in `coordinator.config
@@ -135,7 +135,7 @@ class BomberscatFireNearbyBinarySensor(
 
 
 class HighRiskBinarySensor(CoordinatorEntity[PlaAlfaCoordinator], BinarySensorEntity):
-    """`binary_sensor.bomberscat_high_risk` (feature-spec §3.10, Task 10).
+    """`binary_sensor.bomberscat_high_risk` (feature-spec §3.10).
 
     `on` iff Pla Alfa's `PERIL_M` for `zone.home`'s municipality is at or
     above `options[CONF_HIGH_RISK_THRESHOLD]` (default 3 = "Alt", per
@@ -188,8 +188,8 @@ class HighRiskBinarySensor(CoordinatorEntity[PlaAlfaCoordinator], BinarySensorEn
 class ServiceConnectedBinarySensor(
     CoordinatorEntity[BomberscatDataUpdateCoordinator], BinarySensorEntity
 ):
-    """`binary_sensor.bomberscat_service_connected` (feature-spec §3.11,
-    Task 13): `on` iff the last poll of the Bombers FeatureServer succeeded.
+    """`binary_sensor.bomberscat_service_connected` (feature-spec §3.11):
+    `on` iff the last poll of the Bombers FeatureServer succeeded.
 
     Availability is deliberately overridden to always be `True`: this is a
     diagnostic entity whose entire purpose is to report *when the service is

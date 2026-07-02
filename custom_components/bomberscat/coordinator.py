@@ -1,4 +1,4 @@
-"""Data update coordinator for bomberscat (Task 5) + event emission (Task 9).
+"""Data update coordinator for bomberscat + event emission.
 
 Polls the Bombers ArcGIS FeatureServer (via ``arcgis.fetch_incidents``) on an
 interval, applies the tracking filters/radius from docs/03-feature-spec.md
@@ -40,8 +40,8 @@ tested in arcgis.py, it is simply never passed a real cursor from here
 any more. TIMESTAMP literals/epochs from the service are UTC — the existing
 timezone handling in arcgis.py is correct and untouched by this change.
 
-Error-handling semantics (docs/05-implementation-plan.md Task 5): on a fetch
-failure we raise `UpdateFailed`. Home Assistant's `DataUpdateCoordinator`
+Error-handling semantics: on a fetch failure we raise `UpdateFailed`. Home
+Assistant's `DataUpdateCoordinator`
 only overwrites `self.data` *after* `_async_update_data` returns
 successfully (see `_async_refresh` in
 `homeassistant.helpers.update_coordinator`), so raising `UpdateFailed`
@@ -49,16 +49,16 @@ already guarantees the previous `BomberscatState` (and therefore all
 existing entities) survives untouched — we do not need to special-case
 "keep the old state" ourselves. We additionally mutate the *existing*
 state's `last_error` field in place (when one exists) before raising, so
-that diagnostics entities (Task 13) reading `coordinator.data.last_error`
+that diagnostics entities reading `coordinator.data.last_error`
 see the new error message even though `coordinator.data` itself keeps its
 old identity. `coordinator.last_update_success` (set by the base class to
 `False` on `UpdateFailed`) is the canonical "is the service reachable"
-signal for `binary_sensor.service_connected` (Task 13). On the very first
+signal for `binary_sensor.service_connected`. On the very first
 refresh there is no previous state to mutate, so we raise `UpdateFailed`
 directly; `async_config_entry_first_refresh()` turns that into
-`ConfigEntryNotReady`, which is exactly the behavior Task 5 asks for.
+`ConfigEntryNotReady`, which is exactly the behavior expected.
 
-Event-suppression semantics (Task 9): no events are fired on the very first
+Event-suppression semantics: no events are fired on the very first
 successful refresh after startup/reload (`previous is None`), to avoid a
 notification storm replaying every currently-active fire as "detected" on
 every Home Assistant restart. In practice this only affects
@@ -69,7 +69,7 @@ construction (`base_incidents` is empty). We still suppress unconditionally
 (rather than relying on that invariant) so the intent is explicit and the
 code stays correct if the tracking logic ever changes.
 
-Service-degradation semantics (Task 13, docs/04-architecture.md §9 "URL
+Service-degradation semantics (docs/04-architecture.md §9 "URL
 canviada (404 persistent)"): `BomberscatState.consecutive_4xx_failures`
 counts *consecutive* failures whose `ArcgisClientError.kind` is in
 `_DEGRADATION_KINDS` (a 4xx response — the "schema/URL changed" signature).
@@ -141,7 +141,7 @@ _LOGGER = logging.getLogger(__name__)
 _DEGRADATION_KINDS = frozenset({"http_404", "http_4xx"})
 
 # Number of *consecutive* `_DEGRADATION_KINDS` failures before we consider
-# the service "degraded" (Task 13 / docs/05-implementation-plan.md Task 13).
+# the service "degraded".
 DEGRADED_FAILURE_THRESHOLD = 3
 
 # sensor.last_update_status (feature-spec §3.11) buckets: any
@@ -174,12 +174,11 @@ def last_update_status(state: BomberscatState) -> str:
 class BomberscatRuntimeConfig:
     """Resolved tracking configuration for one config entry.
 
-    Location + the two radii come from `entry.data` (Task 4's config flow
-    step 1); the filters/polling-interval come from `entry.options` with
-    fallbacks to the `const.py` defaults, since the options flow that sets
-    them (Task 11) does not exist yet. Reading options with `.get(...,
-    DEFAULT_*)` here means this coordinator works unmodified once Task 11
-    lands.
+    Location + the two radii come from `entry.data` (the config flow's step
+    1); the filters/polling-interval come from `entry.options` with
+    fallbacks to the `const.py` defaults. Options are read with
+    `.get(..., DEFAULT_*)` so entry.options set by the options flow and
+    unset fresh installs both work.
     """
 
     home_lat: float
@@ -219,7 +218,7 @@ class BomberscatState:
     `incidents` holds everything currently "shown": incidents that pass the
     tracking filters/radius, *plus* incidents that just turned `Extingit`
     and are sitting out their removal grace period (`resolved_at`) so that
-    future `geo_location` entities (Task 7) don't flicker away the instant a
+    future `geo_location` entities don't flicker away the instant a
     fire is put out.
 
     Equality is overridden (`eq=False` + manual `__eq__`) rather than using
@@ -233,7 +232,7 @@ class BomberscatState:
     by `diagnostics.py` rather than any polled entity, so they are
     deliberately excluded here).
 
-    `last_error_kind`/`consecutive_4xx_failures`/`degraded` (Task 13) track
+    `last_error_kind`/`consecutive_4xx_failures`/`degraded` track
     the "persistent 404" resilience case (docs/04-architecture.md §9): see
     `BomberscatDataUpdateCoordinator._async_update_data` for how they are
     updated, and `last_update_status()` above for how `last_error_kind`
@@ -478,11 +477,11 @@ class BomberscatDataUpdateCoordinator(DataUpdateCoordinator[BomberscatState]):
         self._session = session
         self._resolved_grace_minutes = resolved_grace_minutes
         # Companion Pla Alfa coordinator, attached by `async_setup_entry`
-        # right after both coordinators are built. Declared here (QA-wave
-        # fix) instead of being a dynamic attribute; TYPE_CHECKING-only
-        # import avoids a circular import with pla_alfa.py.
+        # right after both coordinators are built. Declared here as a typed
+        # attribute instead of a dynamic one; TYPE_CHECKING-only import
+        # avoids a circular import with pla_alfa.py.
         self.pla_alfa: PlaAlfaCoordinator | None = None
-        # One repair issue per config entry (Task 13): stable across
+        # One repair issue per config entry: stable across
         # reloads within the same entry so a second `async_create_issue`
         # call while already degraded just updates it in place rather than
         # duplicating.
@@ -596,8 +595,8 @@ class BomberscatDataUpdateCoordinator(DataUpdateCoordinator[BomberscatState]):
         Only called the cycle `consecutive_4xx_failures` first reaches
         `DEGRADED_FAILURE_THRESHOLD` (the `not previous.degraded` guard at
         the call site keeps this to a single firing per degradation episode,
-        per docs/05-implementation-plan.md Task 13: "once, not every
-        cycle"). docs/04-architecture.md §9, "URL canviada (404 persistent)".
+        per the requirement to fire once, not every cycle).
+        docs/04-architecture.md §9, "URL canviada (404 persistent)".
         """
         _LOGGER.warning(
             "Bombers FeatureServer degraded: %d consecutive schema/URL-change"

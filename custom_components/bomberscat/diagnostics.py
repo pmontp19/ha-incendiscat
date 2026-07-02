@@ -1,11 +1,11 @@
-"""Diagnostics support for bomberscat (Task 13).
+"""Diagnostics support for bomberscat.
 
 Backs the "Download diagnostics" button HA's core `diagnostics` component
 adds to every config entry once this module exists (no manifest change
 needed — `diagnostics` discovers `diagnostics.py` per-integration lazily).
 
-Redaction (docs/05-implementation-plan.md Task 13): the only PII this
-integration's config entry holds is the precise home location
+Redaction: the only PII this integration's config entry holds is the
+precise home location
 (`CONF_LATITUDE`/`CONF_LONGITUDE` in `entry.data`, set by the config flow's
 `LocationSelector` in `config_flow.py`) — everything else (radii, filters,
 polling interval, high-risk threshold) is non-identifying. We redact both

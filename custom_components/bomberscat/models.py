@@ -1,7 +1,7 @@
 """Domain models for bomberscat: `Incident`, `Fase`, `Tipus`.
 
 No Home Assistant imports here on purpose: this module must be testable in
-complete isolation (see docs/05-implementation-plan.md, Task 2).
+complete isolation.
 
 Field names on the raw GeoJSON `properties` dict come from the Bombers
 FeatureServer view (see docs/01-data-sources.md §2). `from_feature()` is

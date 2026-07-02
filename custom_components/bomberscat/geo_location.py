@@ -1,4 +1,4 @@
-"""Geolocation platform for bomberscat (Task 7): one entity per tracked wildfire.
+"""Geolocation platform for bomberscat: one entity per tracked wildfire.
 
 Implements `geo_location.bomberscat_<act_num>` (docs/03-feature-spec.md
 §3.1): state = distance in km from `zone.home` to the incident, with the
@@ -19,8 +19,8 @@ removing entities for ones that vanished. Each entity is *also* a
 place when its own incident is merely modified (e.g. a `fase` change) —
 the manager only has to care about entities appearing/disappearing.
 
-Registry-orphan strategy (docs/05-implementation-plan.md Task 7 acceptance
-criterion: "sense entitats òrfenes al registre"): we set `unique_id` (as
+Registry-orphan strategy (acceptance criterion: "sense entitats òrfenes al
+registre"): we set `unique_id` (as
 directed by docs/04-architecture.md §7's `BomberscatFireLocation` sketch),
 which means `async_add_entities` registers each entity in the entity
 registry. Merely calling `Entity.async_remove(force_remove=True)` does
@@ -35,8 +35,8 @@ registry row survives an incident's removal (see e.g. `gdacs`/
 `geonetnz_quakes` in Home Assistant core, which do exactly this — as
 opposed to `usgs_earthquakes_feed`/`nsw_rural_fire_service_feed`, which skip
 the registry cleanup and rely on `unique_id`-less entities elsewhere in
-their platform to avoid the issue; we cannot do that here since Task 7
-requires a stable `unique_id`).
+their platform to avoid the issue; we cannot do that here since this
+platform requires a stable `unique_id`).
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 """Pure geometry helpers for bomberscat.
 
 No Home Assistant imports here on purpose: this module must be testable in
-complete isolation (see docs/05-implementation-plan.md, Task 2).
+complete isolation.
 """
 
 from __future__ import annotations

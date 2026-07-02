@@ -1,4 +1,4 @@
-"""Shared `DeviceInfo` helper for bomberscat entities (QA-wave fix).
+"""Shared `DeviceInfo` helper for bomberscat entities.
 
 `sensor.py` and `binary_sensor.py` entities all belong to the integration's
 single "Bombers de Catalunya" service device (`geo_location` is the

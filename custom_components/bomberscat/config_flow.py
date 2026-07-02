@@ -1,10 +1,10 @@
 """Config flow for the Bombers de Catalunya (bomberscat) integration.
 
-Step 1 (Task 4): location + the two tracking radii (§2 of
-docs/03-feature-spec.md). Step 2 (Task 11, this file): subtipus/fases/
+Step 1: location + the two tracking radii (§2 of
+docs/03-feature-spec.md). Step 2 (this file): subtipus/fases/
 polling/min_vehicles, stored as the entry's *options* (not data) at creation
-time so the options flow (also Task 11) can edit them later without
-duplicating the schema/defaults. `async_step_reconfigure` (Task 11) lets the
+time so the options flow can edit them later without
+duplicating the schema/defaults. `async_step_reconfigure` lets the
 user move the tracked location without deleting the integration.
 
 Single instance: this integration models "my home + the fires around it",

@@ -1,5 +1,5 @@
-"""Sensor platform for bomberscat: aggregated wildfire sensors (Task 6+12),
-plus 2 of the 3 diagnostic entities (Task 13: `last_update`,
+"""Sensor platform for bomberscat: aggregated wildfire sensors,
+plus 2 of the 3 diagnostic entities (`last_update`,
 `last_update_status`; the third, `service_connected`, is a binary_sensor).
 
 Implements the 6 aggregated sensors of docs/03-feature-spec.md §3.2-§3.7:
@@ -305,7 +305,7 @@ class TotalVehiclesSensor(BomberscatEntity, SensorEntity):
 
 
 class FireRiskSensor(CoordinatorEntity[PlaAlfaCoordinator], SensorEntity):
-    """`sensor.bomberscat_fire_risk` (feature-spec §3.8, Task 10).
+    """`sensor.bomberscat_fire_risk` (feature-spec §3.8).
 
     Backed by `PlaAlfaCoordinator`, not `BomberscatDataUpdateCoordinator` —
     hence it does not subclass `BomberscatEntity` (typed for the latter) —
@@ -316,8 +316,7 @@ class FireRiskSensor(CoordinatorEntity[PlaAlfaCoordinator], SensorEntity):
     .last_update_success`): when Pla Alfa is down (including a failed first
     refresh — see `__init__.py`'s `async_setup_entry`), this entity reports
     `unavailable` while the Bombers-backed sensors keep working normally
-    (independent coordinators/independent failure domains, Task 10's
-    acceptance criterion).
+    (independent coordinators/independent failure domains).
     """
 
     _attr_has_entity_name = True
@@ -359,7 +358,7 @@ class FireRiskSensor(CoordinatorEntity[PlaAlfaCoordinator], SensorEntity):
 
 
 class LastUpdateSensor(BomberscatEntity, SensorEntity):
-    """`sensor.bomberscat_last_update` (feature-spec §3.11, Task 13):
+    """`sensor.bomberscat_last_update` (feature-spec §3.11):
     timestamp of the last *successful* sync.
 
     `available` is overridden to always be `True` for the same reason as
@@ -387,7 +386,7 @@ class LastUpdateSensor(BomberscatEntity, SensorEntity):
 
 
 class LastUpdateStatusSensor(BomberscatEntity, SensorEntity):
-    """`sensor.bomberscat_last_update_status` (feature-spec §3.11, Task 13):
+    """`sensor.bomberscat_last_update_status` (feature-spec §3.11):
     `"success"` or `"error_<code>"` — see `coordinator.last_update_status()`
     for the classification. `available` always `True`, same rationale as
     `LastUpdateSensor` above.

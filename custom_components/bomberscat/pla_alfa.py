@@ -7,8 +7,7 @@ client-side, we push the test to the server with a single ArcGIS
 `geometry=lon,lat&geometryType=esriGeometryPoint&spatialRel=
 esriSpatialRelIntersects` query per FeatureServer (`returnGeometry=false`
 since we only need the attributes) — confirmed working against the live
-service (see the query in `fetch_risk`'s docstring and the Task 10
-implementation report).
+service (see the query in `fetch_risk`'s docstring).
 
 Three independent queries make up one `PlaAlfaRisk`:
 
@@ -94,9 +93,9 @@ def _nivell_text(level: int) -> str:
     """`nivell_text` for a `PERIL_M`/`PERILL` value.
 
     The live service has been observed returning values outside the
-    documented 0-4 range on the comarcal layer (see the Task 10
-    implementation report) — fall back to `_UNKNOWN_NIVELL_TEXT` rather than
-    raising, since this is a display label, not something we branch on.
+    documented 0-4 range on the comarcal layer — fall back to
+    `_UNKNOWN_NIVELL_TEXT` rather than raising, since this is a display
+    label, not something we branch on.
     """
     return NIVELL_TEXTS.get(level, _UNKNOWN_NIVELL_TEXT)
 
@@ -227,7 +226,7 @@ async def fetch_risk(
 ) -> PlaAlfaRisk:
     """Fetch today's (+tomorrow's) Pla Alfa fire-risk level for `(lat, lon)`.
 
-    Live query verified manually (Task 10 implementation report), e.g.:
+    Live query verified manually, e.g.:
 
         GET Pla_Alfa_Municipal_Avui_FL_2_view/FeatureServer/0/query
             ?geometry=2.1734,41.3851&geometryType=esriGeometryPoint
@@ -304,8 +303,8 @@ class PlaAlfaCoordinator(DataUpdateCoordinator[PlaAlfaRisk]):
     """Polls Pla Alfa for `zone.home`'s fire-risk level.
 
     Deliberately independent from `BomberscatDataUpdateCoordinator`
-    (docs/05-implementation-plan.md Task 10 acceptance criterion: "Pla Alfa
-    caigut no afecta el polling d'incendis"): separate coordinator instance,
+    (acceptance criterion: "Pla Alfa caigut no afecta el polling
+    d'incendis"): separate coordinator instance,
     separate `update_interval` (see `PLA_ALFA_SCAN_INTERVAL_HOURS`), and a
     failure here only ever raises `UpdateFailed`/`ConfigEntryNotReady` for
     *this* coordinator — it never touches the Bombers coordinator's state or
