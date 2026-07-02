@@ -1,0 +1,24 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Bombers de Catalunya",
+        "description": "Set the location to monitor and the two tracking radii. You can drag the marker and resize the circle on the map; both default to your Home Assistant home location.",
+        "data": {
+          "location": "[%key:common::config_flow::data::location%]",
+          "alert_radius": "Alert radius (km)"
+        },
+        "data_description": {
+          "location": "The map's circle sets the tracking radius: fires inside it are tracked (counters, geo_location entities). Default 100 km.",
+          "alert_radius": "Fires inside this smaller radius trigger the \"fire nearby\" binary sensor and events. Must not be larger than the tracking radius."
+        }
+      }
+    },
+    "error": {
+      "alert_gt_track": "The alert radius must not be larger than the tracking radius."
+    },
+    "abort": {
+      "single_instance_allowed": "[%key:common::config_flow::abort::single_instance_allowed%]"
+    }
+  }
+}
