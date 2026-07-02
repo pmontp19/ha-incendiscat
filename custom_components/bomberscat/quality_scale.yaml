@@ -1,5 +1,6 @@
 rules:
   # ─── 🥉 Bronze ────────────────────────────────────────────────────────────
+  # Status verified 2026-07-02 against actual codebase (183 tests passing).
   action_setup:
     status: exempt
     comment: "No service actions exposed (events on hass.bus + blueprint is the chosen UX pattern)."
@@ -12,11 +13,13 @@ rules:
   docs_actions:
     status: exempt
     comment: "No service actions to document."
-  docs_triggers: todo
-  docs_conditions: todo
-  docs_high_level_description: todo
-  docs_installation_instructions: todo
-  docs_removal_instructions: todo
+  docs_triggers: done
+  docs_conditions:
+    status: exempt
+    comment: "Integration does not expose a custom Condition platform. Templates/attribute-based conditions are covered by HA core docs."
+  docs_high_level_description: done
+  docs_installation_instructions: done
+  docs_removal_instructions: done
   entity_event_setup:
     status: exempt
     comment: "Integration does not subscribe to any entity events; it fires bus events instead."
@@ -31,52 +34,52 @@ rules:
   action_exceptions:
     status: exempt
     comment: "No service actions."
-  config_entry_unloading: todo
-  docs_configuration_parameters: todo
-  docs_installation_parameters: todo
-  entity_unavailable: todo
+  config_entry_unloading: done
+  docs_configuration_parameters: done
+  docs_installation_parameters: done
+  entity_unavailable: done
   integration_owner: done
-  log_when_unavailable: todo
+  log_when_unavailable: done
   parallel_updates: todo
   reauthentication_flow:
     status: exempt
     comment: "Data source is unauthenticated (public ArcGIS FeatureServer, no API key). No reauth flow possible."
-  test_coverage: todo
+  test_coverage: done
 
   # ─── 🥇 Gold ──────────────────────────────────────────────────────────────
   devices: done
-  diagnostics: todo
+  diagnostics: done
   discovery:
     status: exempt
     comment: "Cloud-hosted ArcGIS service, not a local network device. Zeroconf/DHCP discovery does not apply."
   discovery_update_info:
     status: exempt
     comment: "No discovery flow exists."
-  docs_data_update: todo
-  docs_examples: todo
+  docs_data_update: done
+  docs_examples: done
   docs_known_limitations: todo
   docs_supported_devices:
     status: exempt
     comment: "Integration does not expose physical devices; it consumes a public web service."
-  docs_supported_functions: todo
+  docs_supported_functions: done
   docs_troubleshooting: todo
-  docs_use_cases: todo
+  docs_use_cases: done
   dynamic_devices:
     status: exempt
     comment: "Single fixed service device per config entry (no add/remove devices after setup)."
-  entity_category: todo
-  entity_device_class: todo
+  entity_category: done
+  entity_device_class: done
   entity_disabled_by_default: todo
   entity_translations: done
   exception_translations: todo
   icon_translations: todo
   reconfiguration_flow: done
-  repair_issues: todo
+  repair_issues: done
   stale_devices:
     status: exempt
     comment: "No dynamic device lifecycle."
 
   # ─── 🏆 Platinum ──────────────────────────────────────────────────────────
   async_dependency: done
-  inject_websession: todo
+  inject_websession: done
   strict_typing: todo

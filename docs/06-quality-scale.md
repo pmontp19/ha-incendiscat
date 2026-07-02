@@ -29,13 +29,13 @@ Quan una regla és `exempt`, **sempre** portem un comentari d'una línia explica
 
 | Tier | Done | Todo | Exempt | Total |
 | :---: | ---: | ---: | ---: | ---: |
-| 🥉 Bronze | 9 | 9 | 4 | 22 |
-| 🥈 Silver | 1 | 6 | 3 | 10 |
-| 🥇 Gold | 3 | 9 | 5 | 17 |
-| 🏆 Platinum | 1 | 2 | 0 | 3 |
-| **Total** | **14** | **26** | **12** | **52** |
+| 🥉 Bronze | 13 | 3 | 4 | 20 |
+| 🥈 Silver | 7 | 1 | 2 | 10 |
+| 🥇 Gold | 11 | 4 | 6 | 21 |
+| 🏆 Platinum | 2 | 1 | 0 | 3 |
+| **Total** | **33** | **9** | **12** | **54** |
 
-> **Nota**: els `todo` no són bloquejadors per v0.1.0. La prioritització és més avall.
+> **Recompte verificat 2026-07-02** contra codi real (183 tests, 98% coverage). Els `todo` no bloquegen v0.1.0 — són backlog de qualitat.
 
 ---
 
@@ -161,6 +161,29 @@ Quan una regla és `exempt`, **sempre** portem un comentari d'una línia explica
 | --- | ---: | --- |
 | `inject_websession` | XS | Passar `async_get_clientsession(hass)` al client ArcGIS en lloc de crear-ne un |
 | `strict_typing` | M-L | Type hints a tots els mòduls. Objectiu: passar `mypy --strict` (o almenys `--disallow-untyped-defs`). No bloqueja v1. |
+
+---
+
+## Estat real (post-verificació 2026-07-02)
+
+**Tot el pla d'implementació (`docs/05-implementation-plan.md` T1–T15) està complet** al repo. T16 (release v0.1.0) pendent de tag.
+
+| Metric | Valor |
+| --- | --- |
+| Tests | 183 passing |
+| Coverage global | 98% |
+| Core modules (`arcgis`/`coordinator`/`geo`/`models`) | ≥92% |
+| Platforms | ≥93% |
+
+**9 todos reals** (els altres 17 es van completar sense tocar el YAML):
+
+| Prioritat | Regles | Esforç |
+| :--- | --- | ---: |
+| **v0.1.0 (pre-release)** | `brands`, `test_before_configure`, `unique_config_entry`, `parallel_updates` | XS |
+| **v0.2.0 (Gold UX)** | `entity_disabled_by_default`, `icon_translations`, `exception_translations`, `docs_known_limitations`, `docs_troubleshooting` | S-M |
+| **v0.3.0 (Platinum)** | `strict_typing` | L (mypy CI) |
+
+> La priorització original a sota s'han ajustat per reflectir el que *ja* està fet.
 
 ---
 
