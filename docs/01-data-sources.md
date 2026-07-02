@@ -84,7 +84,7 @@ Extret del `fields[]` de la resposta JSON. Marcat amb ⭐ els que usarem.
 | `TAL_DESC_ALARMA1` | String(100) | "incendi vegetació" | — |
 | `TAL_COD_ALARMA2` ⭐ | String(4) | `VF`/`VA`/`VU` | **Subtipus**: Forestal/Agrícola/Urbana |
 | `TAL_DESC_ALARMA2` ⭐ | String(100) | Descripció subtipus | Etiqueta llegible |
-| `ACT_SITUACIO` | String(1) | Codi d'estat operatiu | `I`=inici, `P`=?, `N`=? (cal glossari) |
+| `ACT_SITUACIO` | String(1) | Codi d'estat operatiu intern (`A`/`I`/`N`/`P`) | Vegeu glossari més avall |
 | `MUNICIPI_DPX` ⭐ | String(50) | Municipi (DPX) | Ubicació |
 | `MUNICIPI_SIG` ⭐ | String(50) | Municipi (SIG) | Ubicació (més fiable) |
 | `ACT_NUM_VEH` ⭐ | SmallInt | Nre. de vehicles assignats | Magnitud |
@@ -93,7 +93,24 @@ Extret del `fields[]` de la resposta JSON. Marcat amb ⭐ els que usarem.
 | `CreationDate` | Date | Alta | — |
 | `OBJECTID`, `ESRI_OID`, `GlobalID` | IDs | Identificadors estables | Dedup |
 
-**Camps `null`**: `COM_FASE` pot ser `null` en serveis molt nous (fase no assignada encara). Tractar com a "Sense fase".
+**Camps `null`**: `COM_FASE` pot ser `null`. **El renderer del webmap oficial dels Bombers tracta `null` com a "IV Actiu"** (confirmat inspeccionant el JSON del webmap `59dc70908b8d4ed6a1ba5ca90de4e65d`): la llegenda pública només té `Actiu` (null), `Estabilitzat`, `Controlat`, `Extingit`. Per tant mapegem `null → Actiu`, igual que el visor oficial.
+
+**⚠️ Estructura de la taula — log d'snapshots, no 1 fila per incendi** (verificat 2026-07-02: 33 files / 28 actuacions distintes): una mateixa `ACT_NUM_ACTUACIO` pot tenir 2+ files amb `ACT_SITUACIO`/`ACT_NUM_VEH`/`COM_FASE` diferents (cadascuna amb el seu `ESRI_OID`/`GlobalID` i `DATA_ACT` propi). **Cal dedup**: agrupar per `ACT_NUM_ACTUACIO` i quedar-se la fila amb `DATA_ACT` màxim com a estat actual — si no, un mateix incendi es compta i es pinta dues vegades amb estats contradictoris.
+
+### Glossari `ACT_SITUACIO` (investigat 2026-07-02)
+
+**No existeix cap domini oficial**: `fields[].domain` és `null` al servei, el popup del webmap oficial amaga el camp (`visible: false`), i cap dataset de Dades Obertes ni documentació pública en publica el diccionari. Els significats següents són **inferits** per correlació de dades (snapshot de 33 files) — no confirmats per Bombers:
+
+| Codi | Significat inferit | Confiança | Evidència |
+| :---: | --- | --- | --- |
+| `A` | **Activa** (dotacions treballant-hi) | Alta | 100% de files `A` tenen `ACT_NUM_VEH ≥ 1` (mitjana 5.25); tots els altres codis tenen 0 |
+| `N` | **Nova** (acabada de crear, fase no avaluada) | Mitjana-alta | Sempre `COM_FASE = null` (6/6); en els casos traçables és l'snapshot més antic |
+| `P` | **Pendent** (de tancament administratiu) | Mitjana | Mai `COM_FASE = null` (0/4); apareix després de `N` en el cas traçable |
+| `I` | **Inactiva** (sense recursos assignats ara) — millor hipòtesi | Baixa-mitjana | 0 vehicles sempre; cobreix totes les fases; en el cas traçable apareix *després* d'`A` (desmobilització) — **contradiu** la hipòtesi inicial `I = inici` |
+
+Notes:
+- `ACT_DAT_FI` era `null` a les 33 files → la vista probablement només mostra actuacions obertes; pot existir un codi terminal (`F`?/`T`?) mai observat aquí.
+- **Implicacions per a la integració**: (1) fer servir `COM_FASE` com a estat de cara a l'usuari (és el camp que Bombers publica); (2) fer servir `ACT_NUM_VEH > 0` com a senyal de "s'hi està treballant ara" (separació perfecta al snapshot); (3) exposar `ACT_SITUACIO` com a codi cru sense traduir (`situacio: "A"`).
 
 ### Classificació de fase (taxonomia Bombers)
 

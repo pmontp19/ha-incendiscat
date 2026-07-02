@@ -20,7 +20,7 @@ Dispositiu: Bombers de Catalunya (casa)
 ├── sensor.bomberscat_fires_per_fase        ← atributs: actiu/estabilitzat/controlat/extingit
 ├── sensor.bomberscat_fires_per_tipus       ← atributs: VF/VA/VU
 ├── sensor.bomberscat_total_vehicles        ← recursos desplegats al radi
-├── sensor.bomberscat_fire_risk             ← Pla Alfa / perill (1-5 o nivell) [si available]
+├── sensor.bomberscat_fire_risk             ← Pla Alfa (0-4) [si available]
 ├── binary_sensor.bomberscat_fire_nearby    ← hi ha foc dins radi d'alerta
 ├── binary_sensor.bomberscat_high_risk      ← perill d'incendi alt avui [si available]
 ├── geo_location.bomberscat_<act_num>       ← un per incendi
@@ -55,25 +55,16 @@ Distingir els dos radis és clau: pots voler veure tots els focs de Catalunya (s
 
 Tots els anteriors. A més:
 
-- **Llindar de risc alt** (1–5) pel Pla Alfa — default 4.
+- **Llindar de risc alt** (0–4) pel Pla Alfa — default 3 (Alt).
 - **Notificació crítica** (by-passa DND) — checkbox.
-- **Llenguatge**: `ca`/`es`/`en` — per a les etiquetes llegibles dels noms d'entities i attributes.
 
-### YAML legacy
+> **Idioma**: no hi ha opció manual de llengua. Els noms d'entities es tradueixen amb el mecanisme natiu de HA (`has_entity_name` + `translation_key` + `translations/{ca,es,en}.json`), segons l'idioma del sistema. Una opció pròpia seria un anti-patró ([entity-translations](https://developers.home-assistant.io/docs/core/integration-quality-scale/rules/entity-translations/)).
 
-```yaml
-bomberscat:
-  latitude: 41.3851
-  longitude: 2.1734
-  track_radius: 100       # km — radi de seguiment
-  alert_radius: 30        # km — radi d'alerta
-  scan_interval: 5        # minuts
-  subtipus: [VF]          # VF, VA, VU
-  active_phases: [Actiu, Estabilitzat]
-  min_vehicles: 0
-  high_risk_threshold: 4
-  language: ca
-```
+### Reconfiguració
+
+La ubicació i els radis (dades de setup) es canvien via `async_step_reconfigure` (HA ≥ 2024.4), no via options flow. Les opcions (filtres, polling, llindars) van a l'options flow.
+
+> **Sense YAML**: la integració és config-flow-only. [ADR-0010](https://github.com/home-assistant/architecture/blob/master/adr/0010-integration-configuration.md) prohibeix la configuració YAML per a integracions noves.
 
 ---
 
@@ -90,14 +81,14 @@ Una entity per cada incendi que compleix els filtres dins del radi de **seguimen
 | `source` | string | `"bomberscat"` (per filtrar a la Map card / templates) |
 | `latitude`, `longitude` | float | Coordenades WGS84 |
 | `act_num` | string | `ACT_NUM_ACTUACIO` |
-| `fase` | string | `Actiu`/`Estabilitzat`/`Controlat`/`Extingit`/`Sense fase` |
+| `fase` | string | `Actiu`/`Estabilitzat`/`Controlat`/`Extingit` (`COM_FASE` null → `Actiu`, com el visor oficial) |
 | `tipus` | string | `VF`/`VA`/`VU` |
 | `tipus_desc` | string | Descripció llegible (`Incendi vegetació forestal`) |
 | `municipi` | string | `MUNICIPI_SIG` |
 | `data_inici` | datetime | `ACT_DAT_INICI` localitzat |
 | `data_fi` | datetime\|null | `ACT_DAT_FI` |
 | `vehicles` | int | `ACT_NUM_VEH` |
-| `situacio` | string | `ACT_SITUACIO` codi |
+| `situacio` | string | `ACT_SITUACIO` codi cru (`A`/`I`/`N`/`P`, sense domini oficial — no es tradueix) |
 | `updated_at` | datetime | `EditDate` |
 | `url` | string | Enllaç al detall al visor dels Bombers |
 
@@ -130,7 +121,6 @@ Comptador per fase. State: enter total. Attributes:
   "estabilitzat": 3,
   "controlat": 1,
   "extingit": 0,
-  "sense_fase": 0,
   "unit_of_measurement": "incendis"
 }
 ```

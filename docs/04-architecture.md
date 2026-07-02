@@ -87,7 +87,8 @@ Wrapper async mínim sobre el FeatureServer. Fa servir `aiohttp` directament (co
 
 1. **Query paginada** — recórrer tot el dataset amb `resultOffset` fins que `exceededTransferLimit == false`.
 2. **Sync incremental** — si tenim `last_edit_date`, filtra per `EditDate > :last` i ordena ASC.
-3. **Conversió a dataclasses** — `Incident` amb camps forts.
+3. **Dedup per `ACT_NUM_ACTUACIO`** — la vista és un log d'snapshots (una actuació pot tenir 2+ files); ens quedem la fila amb `DATA_ACT` màxim com a estat actual (vegeu `01-data-sources.md` §2).
+4. **Conversió a dataclasses** — `Incident` amb camps forts.
 4. **Tolerància d'esquema** — camps nous/renomenats no trenquen res (usem `.get()`).
 5. **Retries** amb backoff exponencial si 5xx.
 
@@ -139,17 +140,16 @@ from datetime import datetime
 from enum import Enum
 
 class Fase(str, Enum):
+    # COM_FASE null -> ACTIU: és com ho renderitza el webmap oficial dels Bombers
     ACTIU = "Actiu"
     ESTABILITZAT = "Estabilitzat"
     CONTROLAT = "Controlat"
     EXTINGIT = "Extingit"
-    SENSE_FASE = "Sense fase"
 
     @property
     def severity(self) -> int:  # 0..3 per a ordenació de gravetat
         return {Fase.ACTIU: 3, Fase.ESTABILITZAT: 2,
-                Fase.CONTROLAT: 1, Fase.EXTINGIT: 0,
-                Fase.SENSE_FASE: 2}[self]  # tractem null com a actiu (prudent)
+                Fase.CONTROLAT: 1, Fase.EXTINGIT: 0}[self]
 
 class Tipus(str, Enum):
     FORESTAL = "VF"
@@ -180,7 +180,7 @@ class Incident:
             act_num=p.get("ACT_NUM_ACTUACIO", ""),
             lat=float(lat) if lat is not None else 0.0,
             lon=float(lon) if lon is not None else 0.0,
-            fase=_parse_fase(p.get("COM_FASE")),
+            fase=_parse_fase(p.get("COM_FASE")),  # null -> Fase.ACTIU (com el visor oficial)
             tipus=Tipus(p.get("TAL_COD_ALARMA2") or "VF"),
             tipus_desc=p.get("TAL_DESC_ALARMA2", ""),
             municipi=p.get("MUNICIPI_SIG") or p.get("MUNICIPI_DPX"),
@@ -198,6 +198,8 @@ class Incident:
 ## 5. Coordinator (`coordinator.py`)
 
 `DataUpdateCoordinator` amb `update_interval = timedelta(minutes=scan_interval)`.
+
+Convencions actuals: el coordinator es guarda a **`entry.runtime_data`** amb alias tipat (`type BomberscatConfigEntry = ConfigEntry[BomberscatDataUpdateCoordinator]`), **no** a `hass.data[DOMAIN]` (regla [runtime-data](https://developers.home-assistant.io/docs/core/integration-quality-scale/rules/runtime-data/)). A `async_setup_entry`: `await coordinator.async_config_entry_first_refresh()` perquè el setup falli net si el primer fetch falla. `always_update=False` (l'estat implementa `__eq__`) per estalviar escriptures d'estat.
 
 ### Estat que manté
 
@@ -371,7 +373,6 @@ Icones segons `icons.py`:
 | Estabilitzat | `mdi:fire-alert` |
 | Controlat | `mdi:fire-off` |
 | Extingit | `mdi:fire-extinguisher` |
-| Sense fase | `mdi:help-circle` |
 
 ---
 
@@ -404,7 +405,14 @@ class BomberscatConfigFlow(ConfigFlow, domain=DOMAIN):
         return BomberscatOptionsFlow()
 ```
 
-El schema de la passa 1 fa servir un camp de tipus mapa (HA >= 2024.x suporta `location_selector` amb radi).
+El schema de la passa 1 fa servir `selector.LocationSelector(LocationSelectorConfig(radius=True))` (retorna `{latitude, longitude, radius}`, radi en **metres**).
+
+Convencions actuals (validades contra la doc oficial, 2026):
+
+- **Radi com a `vol.Optional` amb default** + validació defensiva: el widget del frontend pot enviar el form sense radi encara que sigui `Required` ([core#108960](https://github.com/home-assistant/core/issues/108960)).
+- **`async_step_reconfigure`** al ConfigFlow (HA ≥ 2024.4) per canviar ubicació/radis post-setup; l'OptionsFlow només per a opcions (filtres, polling, llindars) ([reconfiguration-flow](https://developers.home-assistant.io/docs/core/integration-quality-scale/rules/reconfiguration-flow/)).
+- **OptionsFlow sense `self.config_entry` manual** (deprecat, eliminació HA 2025.12) ni `OptionsFlowWithConfigEntry` — `self.config_entry` ja hi és automàticament ([blog 2024-11-12](https://developers.home-assistant.io/blog/2024/11/12/options-flow/)).
+- **Sense YAML**: config-flow-only per ADR-0010. Cap `async_setup` de plataforma YAML.
 
 ---
 
