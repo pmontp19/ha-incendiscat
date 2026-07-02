@@ -247,6 +247,8 @@ uv pip install --python .venv/bin/python -r requirements_dev.txt
 
 Documentació d'arquitectura i disseny a [`docs/`](docs/): [fonts de dades](docs/01-data-sources.md), [integracions de referència](docs/02-existing-integrations.md), [especificació funcional](docs/03-feature-spec.md), [arquitectura](docs/04-architecture.md), [pla d'implementació](docs/05-implementation-plan.md).
 
+Vols contribuir? Mira [`CONTRIBUTING.md`](CONTRIBUTING.md) (convenció de commits, cicle de release, tests).
+
 ## Integracions de referència
 
 S'han analitzat en profunditat dues integracions HACS existents per aprendre'n els patrons: [`johnbr/ha-wildfire-monitor`](https://github.com/johnbr/ha-wildfire-monitor) (Califòrnia, CAL FIRE API REST) i [`Duarte-Mercedes-Santos/ha-pyrovigil`](https://github.com/Duarte-Mercedes-Santos/ha-pyrovigil) (Portugal, ANEPC ArcGIS + IPMA), aquesta última especialment rellevant perquè fa servir el mateix patró ArcGIS FeatureServer que Catalunya. Anàlisi completa a [`docs/02-existing-integrations.md`](docs/02-existing-integrations.md).
