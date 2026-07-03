@@ -19,8 +19,14 @@ BOMBERS_LIVE_URL = (
 
 # Pla Alfa (Agents Rurals) — daily fire-risk level by municipality/comarca,
 # polygons, for today and tomorrow.
+# NOTE: use `_FL_alternatiu_VW`, not `_FL_2_view`. Both expose the same
+# `pla_alfa_municipal_avui_wgs84` layer, but `_FL_2_view` stopped being
+# refreshed (observed frozen at 2025-12-15 winter values, all 0-1) while
+# `_FL_alternatiu_VW` tracks the official "Mapa del Pla Alfa" viewer's daily
+# ~09:30 update. Verify the chosen view's `editingInfo.lastEditDate` is
+# current if levels ever look stale again.
 PLA_ALFA_MUNI_AVUI_URL = (
-    f"{_ARCGIS_BASE}/Pla_Alfa_Municipal_Avui_FL_2_view/FeatureServer/0"
+    f"{_ARCGIS_BASE}/Pla_Alfa_Municipal_Avui_FL_alternatiu_VW/FeatureServer/0"
 )
 PLA_ALFA_COM_AVUI_URL = f"{_ARCGIS_BASE}/Pla_Alfa_Comarcal_Avui_FL_VW/FeatureServer/1"
 PLA_ALFA_MUNI_DEMA_URL = f"{_ARCGIS_BASE}/pla_alfa_municipal_dema_FL_VW/FeatureServer/5"
