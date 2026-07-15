@@ -10,6 +10,7 @@ covered separately in `test_events.py`.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -17,6 +18,7 @@ import pytest
 from custom_components.incendiscat.arcgis import ArcgisClientError
 from custom_components.incendiscat.const import (
     CONF_ACTIVE_PHASES,
+    CONF_MIN_AGE,
     CONF_MIN_VEHICLES,
     CONF_SUBTIPUS,
     EVENT_FIRE_DETECTED,
@@ -47,6 +49,7 @@ _DEFAULT_CFG = IncendiscatRuntimeConfig(
     subtipus=frozenset({"VF"}),
     active_phases=frozenset({"Actiu"}),
     min_vehicles=0,
+    min_age_min=0,
     scan_interval_min=5,
 )
 
@@ -182,6 +185,49 @@ async def test_min_vehicles_filter(hass: HomeAssistant) -> None:
     reinforced = make_incident("1", vehicles=2)
     with _patched_fetch([reinforced]):
         await coordinator.async_refresh()
+    assert "1" in coordinator.data.incidents
+
+
+async def test_min_age_gates_young_incident_until_old_enough(
+    hass: HomeAssistant, clock
+) -> None:
+    """A fresh incident younger than `min_age` minutes is not tracked yet;
+
+    once it ages past the threshold (and is still present) it starts being
+    tracked and fires `incendiscat_fire_detected`. This is the "wait N
+    minutes before adding a fire" filter that keeps transient incidents
+    (fast resolutions/errors/false alarms) out of Home Assistant.
+    """
+    detected = async_capture_events(hass, EVENT_FIRE_DETECTED)
+    entry = make_config_entry(options={CONF_MIN_AGE: 20})
+    coordinator = _coordinator(hass, entry)
+    # inici 5 min before the (fake) clock -> too young on the first cycle.
+    young = make_incident("1", inici=clock.now - timedelta(minutes=5))
+
+    with _patched_fetch([young], [young]):
+        await coordinator.async_refresh()
+        assert coordinator.data.incidents == {}  # gated: under 20 min old
+        clock.advance(minutes=20)  # now 25 min old
+        await coordinator.async_refresh()
+
+    assert "1" in coordinator.data.incidents
+    assert len(detected) == 1
+    assert detected[0].data["act_num"] == "1"
+
+
+async def test_min_age_tracks_incident_with_null_inici_immediately(
+    hass: HomeAssistant,
+) -> None:
+    """A null `inici` (age can't be computed) fails open: the incident is
+    tracked immediately rather than hidden forever by the min-age gate."""
+    entry = make_config_entry(options={CONF_MIN_AGE: 20})
+    coordinator = _coordinator(hass, entry)
+    inc = make_incident("1")
+    object.__setattr__(inc, "inici", None)
+
+    with _patched_fetch([inc]):
+        await coordinator.async_refresh()
+
     assert "1" in coordinator.data.incidents
 
 
@@ -433,6 +479,35 @@ def test_should_track_false_when_outside_radius_even_if_was_tracked() -> None:
     assert _should_track(inc, _DEFAULT_CFG, distance_km=1, was_tracked=True)
 
 
+def test_should_track_min_age_gates_only_new_young_incidents() -> None:
+    cfg = replace(_DEFAULT_CFG, min_age_min=20)
+    now = datetime(2026, 7, 2, 12, 0, tzinfo=UTC)
+    young = make_incident("1", inici=now - timedelta(minutes=5))
+    old = make_incident("2", inici=now - timedelta(minutes=25))
+
+    # New + too young -> not tracked.
+    assert not _should_track(young, cfg, distance_km=1, was_tracked=False, now=now)
+    # New + old enough -> tracked.
+    assert _should_track(old, cfg, distance_km=1, was_tracked=False, now=now)
+    # Already tracked -> never dropped by the min-age gate, even if young.
+    assert _should_track(young, cfg, distance_km=1, was_tracked=True, now=now)
+
+
+def test_should_track_min_age_disabled_tracks_young_incident() -> None:
+    """`min_age_min == 0` (the default) disables the gate entirely."""
+    now = datetime(2026, 7, 2, 12, 0, tzinfo=UTC)
+    young = make_incident("1", inici=now - timedelta(minutes=1))
+    assert _should_track(young, _DEFAULT_CFG, distance_km=1, was_tracked=False, now=now)
+
+
+def test_should_track_min_age_null_inici_fails_open() -> None:
+    cfg = replace(_DEFAULT_CFG, min_age_min=20)
+    now = datetime(2026, 7, 2, 12, 0, tzinfo=UTC)
+    inc = make_incident("1")
+    object.__setattr__(inc, "inici", None)
+    assert _should_track(inc, cfg, distance_km=1, was_tracked=False, now=now)
+
+
 def test_apply_incident_resolved_when_leaving_tracking() -> None:
     inc = make_incident("1", fase=Fase.CONTROLAT)
     base_incidents = {"1": make_incident("1", fase=Fase.ACTIU)}
@@ -537,3 +612,11 @@ def test_from_entry_uses_defaults_when_options_unset() -> None:
 
     assert cfg.subtipus == {"VF"}
     assert cfg.active_phases == {"Actiu", "Estabilitzat"}
+    assert cfg.min_age_min == 0
+
+
+def test_from_entry_reads_min_age_option() -> None:
+    entry = make_config_entry(options={CONF_MIN_AGE: 20})
+    cfg = IncendiscatRuntimeConfig.from_entry(entry)
+
+    assert cfg.min_age_min == 20

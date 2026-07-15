@@ -14,12 +14,14 @@ from custom_components.incendiscat.const import (
     CONF_ACTIVE_PHASES,
     CONF_ALERT_RADIUS,
     CONF_HIGH_RISK_THRESHOLD,
+    CONF_MIN_AGE,
     CONF_MIN_VEHICLES,
     CONF_SCAN_INTERVAL,
     CONF_SUBTIPUS,
     CONF_TRACK_RADIUS,
     DEFAULT_ACTIVE_PHASES,
     DEFAULT_ALERT_RADIUS_KM,
+    DEFAULT_MIN_AGE_MIN,
     DEFAULT_MIN_VEHICLES,
     DEFAULT_SCAN_INTERVAL_MIN,
     DEFAULT_SUBTIPUS,
@@ -43,6 +45,7 @@ FILTERS_DEFAULTS = {
     CONF_ACTIVE_PHASES: DEFAULT_ACTIVE_PHASES,
     CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL_MIN,
     CONF_MIN_VEHICLES: DEFAULT_MIN_VEHICLES,
+    CONF_MIN_AGE: DEFAULT_MIN_AGE_MIN,
 }
 
 
@@ -105,6 +108,7 @@ async def test_filters_step_prefilled_with_spec_defaults(hass: HomeAssistant) ->
     assert suggested[CONF_ACTIVE_PHASES] == DEFAULT_ACTIVE_PHASES
     assert suggested[CONF_SCAN_INTERVAL] == DEFAULT_SCAN_INTERVAL_MIN
     assert suggested[CONF_MIN_VEHICLES] == DEFAULT_MIN_VEHICLES
+    assert suggested[CONF_MIN_AGE] == DEFAULT_MIN_AGE_MIN
 
 
 async def test_missing_radius_uses_default(hass: HomeAssistant) -> None:

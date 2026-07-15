@@ -20,13 +20,15 @@
           "subtipus": "Subtipus d'incident",
           "active_phases": "Fases actives",
           "scan_interval": "Interval de sondeig (min)",
-          "min_vehicles": "Vehicles mínims"
+          "min_vehicles": "Vehicles mínims",
+          "min_age": "Edat mínima de l'incident (min)"
         },
         "data_description": {
           "subtipus": "Només se segueixen els incendis d'aquests subtipus. Per defecte: només incendis forestals.",
           "active_phases": "Fases comptades com a \"actives\" pels comptadors i pel sensor d'incendi a prop.",
           "scan_interval": "Cada quants minuts es consulta el canal en directe dels Bombers. Interval 1-60.",
-          "min_vehicles": "Ignora els incidents amb menys d'aquest nombre de vehicles assignats. 0 desactiva aquest filtre."
+          "min_vehicles": "Ignora els incidents amb menys d'aquest nombre de vehicles assignats. 0 desactiva aquest filtre.",
+          "min_age": "Només se segueixen els incidents amb com a mínim aquests minuts d'antiguitat (segons la seva hora d'inici), perquè els de vida curta —resolucions ràpides, errors de despatx, falses alarmes— no apareguin mai. 0 desactiva aquest filtre."
         }
       },
       "reconfigure": {
@@ -60,6 +62,7 @@
           "active_phases": "Fases actives",
           "scan_interval": "Interval de sondeig (min)",
           "min_vehicles": "Vehicles mínims",
+          "min_age": "Edat mínima de l'incident (min)",
           "high_risk_threshold": "Llindar de risc alt"
         },
         "data_description": {
@@ -67,6 +70,7 @@
           "active_phases": "Fases comptades com a \"actives\" pels comptadors i pel sensor d'incendi a prop.",
           "scan_interval": "Cada quants minuts es consulta el canal en directe dels Bombers. Interval 1-60.",
           "min_vehicles": "Ignora els incidents amb menys d'aquest nombre de vehicles assignats. 0 desactiva aquest filtre.",
+          "min_age": "Només se segueixen els incidents amb com a mínim aquests minuts d'antiguitat (segons la seva hora d'inici), perquè els de vida curta —resolucions ràpides, errors de despatx, falses alarmes— no apareguin mai. 0 desactiva aquest filtre.",
           "high_risk_threshold": "Nivell de risc del Pla Alfa (0-4) a partir del qual s'activa binary_sensor.high_risk."
         }
       }

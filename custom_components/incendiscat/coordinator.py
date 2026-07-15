@@ -105,11 +105,13 @@ from .const import (
     BOMBERS_VIEWER_URL,
     CONF_ACTIVE_PHASES,
     CONF_ALERT_RADIUS,
+    CONF_MIN_AGE,
     CONF_MIN_VEHICLES,
     CONF_SCAN_INTERVAL,
     CONF_SUBTIPUS,
     CONF_TRACK_RADIUS,
     DEFAULT_ACTIVE_PHASES,
+    DEFAULT_MIN_AGE_MIN,
     DEFAULT_MIN_VEHICLES,
     DEFAULT_RESOLVED_GRACE_PERIOD_MIN,
     DEFAULT_SCAN_INTERVAL_MIN,
@@ -226,6 +228,7 @@ class IncendiscatRuntimeConfig:
     subtipus: frozenset[str]
     active_phases: frozenset[str]
     min_vehicles: int
+    min_age_min: int
     scan_interval_min: int
 
     @classmethod
@@ -245,6 +248,7 @@ class IncendiscatRuntimeConfig:
                 options.get(CONF_ACTIVE_PHASES, DEFAULT_ACTIVE_PHASES), _FASE_BY_SLUG
             ),
             min_vehicles=int(options.get(CONF_MIN_VEHICLES, DEFAULT_MIN_VEHICLES)),
+            min_age_min=int(options.get(CONF_MIN_AGE, DEFAULT_MIN_AGE_MIN)),
             scan_interval_min=int(
                 options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL_MIN)
             ),
@@ -327,6 +331,7 @@ def _should_track(
     *,
     distance_km: float,
     was_tracked: bool,
+    now: datetime | None = None,
 ) -> bool:
     """Whether `inc` belongs in `IncendiscatState.incidents` this cycle."""
     if not _passes_filters(inc, cfg):
@@ -335,7 +340,23 @@ def _should_track(
         return False
     # A never-before-tracked incident that is already Extingit: nothing to
     # track or alert on (see _passes_filters docstring).
-    return not (inc.fase is Fase.EXTINGIT and not was_tracked)
+    if inc.fase is Fase.EXTINGIT and not was_tracked:
+        return False
+    # Minimum-age gate (see DEFAULT_MIN_AGE_MIN in const.py): a fresh
+    # incident must have existed at least `min_age_min` minutes
+    # (`now - inici`) before we start tracking it, so transient incidents
+    # that vanish within minutes never generate an entity/event. Only gates
+    # *new* incidents (`not was_tracked`) — one already tracked keeps being
+    # tracked. A null `inici` (age unknown) fails open: track it now rather
+    # than hide it forever. `now is None` (helper called without a clock,
+    # only in unit tests) also skips the gate.
+    return not (
+        not was_tracked
+        and cfg.min_age_min > 0
+        and now is not None
+        and inc.inici is not None
+        and now - inc.inici < timedelta(minutes=cfg.min_age_min)
+    )
 
 
 def _fire_detected_payload(
@@ -407,7 +428,7 @@ def _apply_incident(
     was_tracked = inc.act_num in base_incidents
     old_fase = base_incidents[inc.act_num].fase if was_tracked else None
     should_track = _should_track(
-        inc, cfg, distance_km=distance, was_tracked=was_tracked
+        inc, cfg, distance_km=distance, was_tracked=was_tracked, now=now
     )
 
     if not should_track:

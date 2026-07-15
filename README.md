@@ -35,7 +35,7 @@ El flux de configuració té dos passos:
 
    Distingir-los permet veure tots els incendis de Catalunya al mapa però rebre alertes només dels que són realment a prop.
 
-2. **Filtres i sondeig** — subtipus a incloure (`VF`/`VA`/`VU`, per defecte només forestal), fases considerades "actives" (per defecte `Actiu`+`Estabilitzat`), interval de sondeig en minuts (1–60, per defecte 5) i nombre mínim de vehicles per considerar un incident.
+2. **Filtres i sondeig** — subtipus a incloure (`VF`/`VA`/`VU`, per defecte només forestal), fases considerades "actives" (per defecte `Actiu`+`Estabilitzat`), interval de sondeig en minuts (1–60, per defecte 5), nombre mínim de vehicles per considerar un incident i **edat mínima de l'incident** en minuts (0–120, per defecte 0 = desactivat). Aquesta última és una espera: un incendi només es comença a seguir quan té com a mínim aquesta antiguitat (segons la seva hora d'inici), de manera que els que apareixen i desapareixen als pocs minuts —resolucions ràpides, errors de despatx o falses alarmes— no arriben a crear entitat ni a disparar `incendiscat_fire_detected`. Un incendi ja en seguiment no es descarta mai per aquest filtre.
 
 Un cop configurada, **Configuració → Dispositius i serveis → Incendis Catalunya → Configurar** obre les opcions: els mateixos filtres més el **llindar de risc alt** (0–4 del Pla Alfa, per defecte 2 = Alt).
 

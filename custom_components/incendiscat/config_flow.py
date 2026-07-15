@@ -47,6 +47,7 @@ from .const import (
     CONF_ACTIVE_PHASES,
     CONF_ALERT_RADIUS,
     CONF_HIGH_RISK_THRESHOLD,
+    CONF_MIN_AGE,
     CONF_MIN_VEHICLES,
     CONF_SCAN_INTERVAL,
     CONF_SUBTIPUS,
@@ -54,16 +55,19 @@ from .const import (
     DEFAULT_ACTIVE_PHASES,
     DEFAULT_ALERT_RADIUS_KM,
     DEFAULT_HIGH_RISK_THRESHOLD,
+    DEFAULT_MIN_AGE_MIN,
     DEFAULT_MIN_VEHICLES,
     DEFAULT_SCAN_INTERVAL_MIN,
     DEFAULT_SUBTIPUS,
     DEFAULT_TRACK_RADIUS_KM,
     DOMAIN,
     MAX_HIGH_RISK_THRESHOLD,
+    MAX_MIN_AGE_MIN,
     MAX_SCAN_INTERVAL_MIN,
     MAX_TRACK_RADIUS_KM,
     MIN_ALERT_RADIUS_KM,
     MIN_HIGH_RISK_THRESHOLD,
+    MIN_MIN_AGE_MIN,
     MIN_SCAN_INTERVAL_MIN,
     MIN_TRACK_RADIUS_KM,
 )
@@ -149,6 +153,17 @@ def _build_filters_schema(*, include_high_risk_threshold: bool) -> vol.Schema:
             selector.NumberSelectorConfig(
                 min=0,
                 step=1,
+                mode=selector.NumberSelectorMode.BOX,
+            )
+        ),
+        vol.Optional(
+            CONF_MIN_AGE, default=DEFAULT_MIN_AGE_MIN
+        ): selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=MIN_MIN_AGE_MIN,
+                max=MAX_MIN_AGE_MIN,
+                step=1,
+                unit_of_measurement="min",
                 mode=selector.NumberSelectorMode.BOX,
             )
         ),
@@ -284,6 +299,7 @@ class IncendiscatConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_ACTIVE_PHASES: DEFAULT_ACTIVE_PHASES,
                 CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL_MIN,
                 CONF_MIN_VEHICLES: DEFAULT_MIN_VEHICLES,
+                CONF_MIN_AGE: DEFAULT_MIN_AGE_MIN,
             },
         )
         return self.async_show_form(step_id="filters", data_schema=data_schema)
@@ -368,6 +384,7 @@ class IncendiscatOptionsFlow(OptionsFlow):
                 CONF_ACTIVE_PHASES: DEFAULT_ACTIVE_PHASES,
                 CONF_SCAN_INTERVAL: DEFAULT_SCAN_INTERVAL_MIN,
                 CONF_MIN_VEHICLES: DEFAULT_MIN_VEHICLES,
+                CONF_MIN_AGE: DEFAULT_MIN_AGE_MIN,
                 CONF_HIGH_RISK_THRESHOLD: DEFAULT_HIGH_RISK_THRESHOLD,
                 **self.config_entry.options,
             },
