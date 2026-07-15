@@ -83,6 +83,7 @@ CONF_SCAN_INTERVAL = "scan_interval"
 CONF_SUBTIPUS = "subtipus"
 CONF_ACTIVE_PHASES = "active_phases"
 CONF_MIN_VEHICLES = "min_vehicles"
+CONF_MIN_AGE = "min_age"
 CONF_HIGH_RISK_THRESHOLD = "high_risk_threshold"
 
 # ---------------------------------------------------------------------------
@@ -120,6 +121,19 @@ DEFAULT_ACTIVE_PHASES = ["actiu", "estabilitzat"]
 
 # Minimum number of assigned vehicles (ACT_NUM_VEH) to consider an incident.
 DEFAULT_MIN_VEHICLES = 0
+
+# Minimum age (minutes) an incident must have — `now - ACT_DAT_INICI` — before
+# it starts being tracked. Filters out transient incidents that appear in the
+# Bombers view and vanish within minutes (fast resolutions, dispatch errors,
+# false alarms) before they generate a `geo_location` entity or a
+# `incendiscat_fire_detected` event. Only gates *new* incidents: one already
+# being tracked is never dropped by this filter. An incident with a null
+# `ACT_DAT_INICI` (whose age can't be computed) is tracked immediately
+# (fail-open) rather than hidden forever. 0 = disabled (track immediately),
+# the default so existing installs keep their behavior.
+DEFAULT_MIN_AGE_MIN = 0
+MIN_MIN_AGE_MIN = 0
+MAX_MIN_AGE_MIN = 120
 
 # Pla Alfa risk level (PERIL_M, 0-4) threshold for binary_sensor.high_risk.
 # 2 = "Alt" per Interior's official Pla Alfa legend (docs/01-data-sources.md

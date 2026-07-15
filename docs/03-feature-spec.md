@@ -50,6 +50,7 @@ Distingir els dos radis és clau: pots voler veure tots els focs de Catalunya (s
 - **Polling interval** (minuts): default 5, rang 1–60.
 - **Fases a considerar "actives"**: `[✓] Actiu [✓] Estabilitzat [ ] Controlat [ ] Extingit` — per defecte les dues primeres.
 - **Mida mínima (vehicles)**: ignorar serveis amb menys de N vehicles assignats. Default 0 (tots).
+- **Edat mínima (minuts)**: espera abans d'afegir un incendi. Només es comença a seguir quan `now - ACT_DAT_INICI ≥ N`, així els incidents transitoris que apareixen i desapareixen als pocs minuts (resolucions ràpides, errors de despatx, falses alarmes) no generen entitat ni event. Rang 0–120, default 0 (desactivat). Només filtra incidents *nous*; un ja en seguiment no es descarta mai. Un `ACT_DAT_INICI` nul (edat no calculable) es tracka immediatament (fail-open).
 
 ### Opcions reconfigurables (Configure post-setup)
 

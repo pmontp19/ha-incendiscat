@@ -20,13 +20,15 @@
           "subtipus": "Incident subtypes",
           "active_phases": "Active phases",
           "scan_interval": "Polling interval (min)",
-          "min_vehicles": "Minimum vehicles"
+          "min_vehicles": "Minimum vehicles",
+          "min_age": "Minimum incident age (min)"
         },
         "data_description": {
           "subtipus": "Only fires of these subtypes are tracked. Default: forest fires only.",
           "active_phases": "Phases counted as \"active\" for the counters and the fire-nearby sensor.",
           "scan_interval": "How often (in minutes) to poll the Bombers live feed. Range 1-60.",
-          "min_vehicles": "Ignore incidents with fewer than this many vehicles assigned. 0 disables this filter."
+          "min_vehicles": "Ignore incidents with fewer than this many vehicles assigned. 0 disables this filter.",
+          "min_age": "Only track incidents at least this many minutes old (based on their start time), so short-lived ones — fast resolutions, dispatch errors, false alarms — never appear. 0 disables this filter."
         }
       },
       "reconfigure": {
@@ -60,6 +62,7 @@
           "active_phases": "Active phases",
           "scan_interval": "Polling interval (min)",
           "min_vehicles": "Minimum vehicles",
+          "min_age": "Minimum incident age (min)",
           "high_risk_threshold": "High-risk threshold"
         },
         "data_description": {
@@ -67,6 +70,7 @@
           "active_phases": "Phases counted as \"active\" for the counters and the fire-nearby sensor.",
           "scan_interval": "How often (in minutes) to poll the Bombers live feed. Range 1-60.",
           "min_vehicles": "Ignore incidents with fewer than this many vehicles assigned. 0 disables this filter.",
+          "min_age": "Only track incidents at least this many minutes old (based on their start time), so short-lived ones — fast resolutions, dispatch errors, false alarms — never appear. 0 disables this filter.",
           "high_risk_threshold": "Pla Alfa risk level (0-4) at or above which binary_sensor.high_risk turns on."
         }
       }
