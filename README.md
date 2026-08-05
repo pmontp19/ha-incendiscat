@@ -249,6 +249,8 @@ uv pip install --python .venv/bin/python -r requirements_dev.txt
 
 Documentació d'arquitectura i disseny a [`docs/`](docs/): [fonts de dades](docs/01-data-sources.md), [integracions de referència](docs/02-existing-integrations.md), [especificació funcional](docs/03-feature-spec.md), [arquitectura](docs/04-architecture.md), [pla d'implementació](docs/05-implementation-plan.md).
 
+A [`docs/avisoscat/`](docs/avisoscat/) hi ha el disseny d'una **integració germana i separada** per als avisos de temps sever del Meteocat (Situació Meteorològica de Perill). No forma part d'aquesta integració: viu aquí mentre es prepara el repositori propi (`ha-avisoscat`).
+
 Voleu contribuir? Mireu [`CONTRIBUTING.md`](CONTRIBUTING.md) (convenció de commits, cicle de release, tests).
 
 ## Integracions de referència
