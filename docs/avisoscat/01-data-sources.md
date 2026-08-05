@@ -15,7 +15,11 @@ comparteixen convencions amb `ha-incendiscat`.
 L'SMC identifica una **Situació Meteorològica de Perill** quan preveu la superació d'uns
 llindars específics per a cada **meteor** (fenomen). El comunicat s'envia immediatament al
 **CECAT** (Centre de Coordinació Operativa de Catalunya), que activa el pla de Protecció
-Civil corresponent — d'aquí que el §5 d'aquest document sigui un complement natural.
+Civil corresponent.
+
+Aquesta cadena **SMC → CECAT → pla** és una sola història causal però són **dues
+autoritats**, amb cadències i abasts diferents. El §5 documenta la font del CECAT, però
+va a una integració separada (vegeu-hi la nota).
 
 Referències oficials:
 
@@ -137,6 +141,19 @@ TIPUS_TEMPS_VIOLENT = "Avís Vigilància per Temps Violent"
 `"Avís temps violent"`. **Cap comparació amb aquests literals pot ser exhaustiva** — vegeu
 §6.
 
+### 1.5.1 Antelació real — el SMP no és un sistema de temps real
+
+| Tipus | Antelació típica | Naturalesa |
+| --- | --- | --- |
+| Preavís | 3 dies o més | Planificació |
+| **Avís** | Del dia present al 3r dia | **Predicció** — el gruix del sistema |
+| Avís Vigilància | Hores | Curt termini |
+| **Avís Vigilància per Temps Violent** | **Minuts** (2 h de vigència) | **Nowcast** |
+
+Això té conseqüències directes sobre el sondeig i el model d'entitats: només l'última fila
+justifica sondejar cada 10 minuts, i el gruix del valor està a saber **què ve**, no només
+què hi ha ara. Vegeu `03-feature-spec.md` §1.1 i §6.
+
 ### 1.6 Distribució geogràfica
 
 Camp `distribucioGeografica` de cada evolució, indica quina part de la zona avisada
@@ -232,7 +249,7 @@ cada consulta d'usuari final.
 
 ---
 
-## 3. Font pública sense clau ⭐ (font principal per a temps real)
+## 3. Font pública sense clau ⭐ (font principal)
 
 `meteo.cat` **incrusta el payload SMP sencer** dins de les seves pàgines, en una crida JS
 del seu propi bundle:
@@ -343,7 +360,14 @@ generem ha de tolerar ids desconeguts (§6), no petar.
 
 ---
 
-## 5. Plans de Protecció Civil (CECAT) — dades obertes, sense clau, temps real
+## 5. Plans de Protecció Civil (CECAT) — recerca per a la integració germana
+
+> **Fora d'abast de la v1 d'`ha-avisoscat`.** Aquesta font va a `ha-cecat`, una integració
+> separada: l'àmbit és Catalunya sencera (no la comarca), l'abast natural cobreix plans no
+> meteorològics (SISMICAT, TRANSCAT, RADCAT…) i el precedent de HA core és unànime
+> (`nina` vs `dwd_weather_warnings`). Raonament complet a
+> [`02-existing-integrations.md`](02-existing-integrations.md) §8. La recerca es conserva
+> aquí perquè és vàlida i costa de refer.
 
 ```
 GET https://analisi.transparenciacatalunya.cat/resource/wj9c-j6vf.json
@@ -369,8 +393,9 @@ Camps: `plaacronim` / `planom` (INUNCAT, VENTCAT, NEUCAT, PROCICAT, …), `plafa
 **`DD/MM/YYYY HH:MM`**, hora local, no ISO), `comunicatpdf.url`, `descripcio`.
 
 **Per què val la pena**: un avís SMP diu què preveu el meteoròleg; aquest dataset diu si
-Protecció Civil ha activat realment el pla. És el senyal accionable per a automacions
-serioses (tancar persianes, avisar la família), i és oficial, obert i sense quota.
+Protecció Civil ha activat realment el pla. És oficial, obert, sense quota i en temps real.
+Creuar les dues coses (`avís greu` **i** `INUNCAT en ALERTA`) és una condició d'automació
+trivial amb les dues integracions instal·lades — no cal que comparteixin domini.
 
 Notes: `descripcio` i `planom` són text lliure extern; la data no és ISO i pot venir buida;
 la llista pot ser buida (cap pla actiu) — cap d'aquestes coses pot fer fallar el parseig.
@@ -444,7 +469,7 @@ FeatureServers ArcGIS: **`.get()` amb valor per defecte, mai indexació directa*
 | `meteo.cat` (payload inline) | Dades oficials, **accés no documentat** | No | 10 min (`max-age=600`) | Mitjà — el marcatge pot canviar sense avís | ⭐ Font principal |
 | `api.meteo.cat/pronostic/v2/smp` | Sí | **Sí** | ~3 peticions/dia (quota ciutadana) | Baix | Opcional, quan l'usuari té clau |
 | `static-m.meteo.cat/.../comarquesAmbMar.json` | Actiu estàtic oficial | No | Un cop (i cache) | Baix | Resolució comarca ⭐ |
-| `analisi.transparenciacatalunya.cat/resource/wj9c-j6vf` | **Sí, dades obertes** | No | Contínua | Baix | Complement CECAT ⭐ |
+| `analisi.transparenciacatalunya.cat/resource/wj9c-j6vf` | **Sí, dades obertes** | No | Contínua | Baix | `ha-cecat` (fora d'abast v1) |
 | `api.meteo.cat/quotes/v1/consum-actual` | Sí | Sí | 1/dia | Baix | Sensor de diagnòstic |
 
 **Cap dels endpoints sense clau és una API oficialment suportada.** Es tracten amb la
@@ -466,7 +491,7 @@ https://api.meteo.cat/quotes/v1/consum-actual
 # Referència territorial (sense clau)
 https://static-m.meteo.cat/assets-w3/json/topojson/comarquesAmbMar.json
 
-# Protecció Civil (sense clau, dades obertes)
+# Protecció Civil — NO a la v1, va a `ha-cecat` (sense clau, dades obertes)
 https://analisi.transparenciacatalunya.cat/resource/wj9c-j6vf.json
 ```
 

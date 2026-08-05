@@ -17,7 +17,6 @@ ha-avisoscat/
 │       ├── config_flow.py          # ubicació → comarca, opcions, reauth
 │       ├── const.py                # domini, URLs, defaults, claus de config
 │       ├── coordinator.py          # AvisoscatDataUpdateCoordinator + events
-│       ├── cecat.py                # CecatCoordinator (plans de Protecció Civil)
 │       ├── smp.py                  # client dual: font pública / API oficial
 │       ├── parser.py               # extracció del payload inline + normalització
 │       ├── models.py               # dataclasses i enums, sense imports de HA
@@ -40,8 +39,7 @@ ha-avisoscat/
 │   │   ├── smp_episodis_empty.json
 │   │   ├── smp_preavisos_sample.json
 │   │   ├── smp_temps_violent_sample.json
-│   │   ├── comarques_topo_sample.json
-│   │   └── cecat_sample.json             # INUNCAT en ALERTA
+│   │   └── comarques_topo_sample.json
 │   └── test_*.py
 ├── docs/01-…05-…md                 # aquests documents
 ├── .github/workflows/{ci,validate}.yml
@@ -203,7 +201,6 @@ Cadascun dels traps de [`01-data-sources.md`](01-data-sources.md) §6 té un hel
 | Franja `"18-00"` | La clau del `dict` ve del JSON, no d'una constant nostra |
 | `idComarca` desconegut | `comarques.nom(id)` → `f"Comarca {id}"` amb warning |
 | Text extern | Mai HTML; els atributs es publiquen tal qual i el README avisa |
-| Data CECAT `DD/MM/YYYY HH:MM` | `_parse_cecat_dt()` explícit, `None` si falla |
 
 ---
 
@@ -256,24 +253,20 @@ poden aparèixer més).
 
 ---
 
-## 7. Coordinators
+## 7. Coordinator
 
-Dos, independents, tots dos a `entry.runtime_data`:
+Un de sol. Els plans de Protecció Civil van a una integració separada
+([`02-existing-integrations.md`](02-existing-integrations.md) §8), així que aquí no hi ha
+res a compondre:
 
 ```python
-@dataclass
-class AvisoscatRuntimeData:
-    smp: AvisoscatDataUpdateCoordinator
-    cecat: CecatCoordinator | None
-
-type AvisoscatConfigEntry = ConfigEntry[AvisoscatRuntimeData]
+type AvisoscatConfigEntry = ConfigEntry[AvisoscatDataUpdateCoordinator]
 ```
 
-> `ha-incendiscat` va acabar penjant el segon coordinator com a atribut del primer per
+> `ha-incendiscat` va acabar penjant el seu segon coordinator com a atribut del primer per
 > minimitzar el diff (vegeu el comentari a `custom_components/incendiscat/__init__.py`).
-> Aquí comencem de zero, així que fem-ho bé des del principi amb un contenidor tipat.
-
-### `AvisoscatDataUpdateCoordinator`
+> Aquí el problema no existeix: una font, un coordinator. Si algun dia en calgués un segon,
+> es faria amb un contenidor tipat, no amb un atribut.
 
 Estat que manté:
 
@@ -281,41 +274,53 @@ Estat que manté:
 @dataclass
 class AvisoscatState:
     snapshot: SmpSnapshot | None
-    vigents: dict[Meteor, AfectacioVigent]    # el que està actiu ARA
-    max_avui: AfectacioVigent | None
+    en_vigor: dict[Meteor, AfectacioVigent]      # actiu ARA
+    anunciats: dict[Meteor, AfectacioFutura]     # emès, encara no vigent
+    outlook: dict[date, dict[str, int]]          # dia -> {franja: grau}, 3 dies
     preavis: Preavis | None
     temps_violent: TempsViolent | None
     last_success: datetime | None
     last_error: str | None
     consecutive_failures: int
     quota: QuotaInfo | None
+    announced_seen: set[tuple[Meteor, TipusAvis, datetime]]   # dedup d'anuncis
 ```
+
+`en_vigor` i `anunciats` són **dues projeccions del mateix snapshot**, separades pel
+rellotge (§1.1 de `03-feature-spec.md`). `outlook` alimenta els sensors `grau_maxim_*` i
+les seves graelles per franja.
 
 Cicle:
 
 1. `source.fetch()`; si falla → conservar `snapshot`, incrementar `consecutive_failures`,
    marcar `last_error`. **Mai esborrar dades bones.**
-2. Recalcular `vigents` amb `vigencia.afectacions_vigents(...)`.
-3. Comparar amb `vigents` del cicle anterior → emetre events (§8).
+2. Recalcular `en_vigor`, `anunciats` i `outlook` amb `vigencia`.
+3. Comparar amb el cicle anterior → emetre events (§8).
 4. `always_update=False` (`AvisoscatState` implementa `__eq__`) per estalviar escriptures
    d'estat.
 
-### `CecatCoordinator`
-
-Interval fix de 15 min contra el dataset Socrata. Compara la fase per pla amb el cicle
-anterior i emet `avisoscat_civil_protection_phase_change`. Una fallada seva **no** ha de
-fer caure l'entrada: és un complement (mateix criteri que Pla Alfa a `ha-incendiscat`).
-
----
+Els passos 2–3 també els executa el tick d'un minut de `__init__.py`, **sense el pas 1**:
+és el que converteix un canvi de franja en `avisoscat_warning_started` sense tocar la
+xarxa.
 
 ## 8. Detecció d'events
 
+Dos bucles independents, un per horitzó.
+
 ```python
-def _emit_events(hass, prev: dict[Meteor, AfectacioVigent], curr: dict[...]) -> None:
+def _emit_announced(state, anunciats) -> None:
+    """Emissions noves. Dedup per (meteor, tipus, data_emissio)."""
+    for meteor, af in anunciats.items():
+        key = (meteor, af.tipus, af.data_emissio)
+        if key not in state.announced_seen:
+            state.announced_seen.add(key)
+            fire(EVENT_WARNING_ANNOUNCED, payload_announced(af))
+
+def _emit_in_force(prev: dict[Meteor, AfectacioVigent], curr) -> None:
     for meteor, af in curr.items():
         old = prev.get(meteor)
         if old is None:
-            fire(EVENT_WARNING_ISSUED, payload(af))
+            fire(EVENT_WARNING_STARTED, payload_started(af))
         elif af.perill > old.perill:
             fire(EVENT_WARNING_UPGRADED, payload(af, old))
         elif af.perill < old.perill:
@@ -325,13 +330,18 @@ def _emit_events(hass, prev: dict[Meteor, AfectacioVigent], curr: dict[...]) -> 
             fire(EVENT_WARNING_CLEARED, payload_cleared(old))
 ```
 
-`avisoscat_violent_weather` es dispara un cop per `dataEmisio` (es memoritza el darrer
-emès per no repetir-lo a cada cicle mentre dura la finestra de 2 h).
+Detalls que importen:
 
-`avisoscat_service_degraded` es dispara **una sola vegada** en creuar el llindar de
-`DEGRADED_FAILURE_THRESHOLD = 3`, no a cada cicle.
-
----
+- **`announced_seen` es purga** quan l'avís entra en vigor o expira; si no, creix sense
+  límit. Viu en memòria: després d'un reinici de HA es reconstrueix marcant com a ja vistos
+  tots els anuncis del snapshot inicial, de manera que **arrencar no dispara una allau
+  d'events** d'avisos que ja fa dies que estan emesos.
+- **Una ampliació sí que renotifica**: `estat: "Ampliat"` porta un `dataEmisio` nou, que és
+  una clau nova. És el comportament desitjat — l'SMC ha canviat alguna cosa.
+- `avisoscat_violent_weather` es dispara un cop per `dataEmisio`, no a cada cicle mentre
+  dura la finestra de 2 h.
+- `avisoscat_service_degraded` es dispara **una sola vegada** en creuar
+  `DEGRADED_FAILURE_THRESHOLD = 3`, no a cada cicle.
 
 ## 9. Entitats
 
@@ -386,20 +396,23 @@ referència.
 | JSON invàlid | Log + es conserva la cache |
 | Camp esperat absent | `.get()` amb default a `models.py`. Warning, mai excepció |
 | 3 fallades seguides del mateix tipus | `avisoscat_service_degraded` + *repair issue* amb `learn_more_url` als issues del repo |
-| CECAT caigut | Els sensors del CECAT queden `unavailable`; els avisos SMP no se'n veuen afectats |
 
 ### Límits de sondeig
 
-- Mínim absolut **10 minuts** amb la font pública: `cache-control: max-age=600`. Sondejar
-  més sovint és consumir amplada de banda d'un servei públic per a res.
-- Amb API key, l'interval el marca la quota (§6 de `03-feature-spec.md`), mai l'usuari sol.
-- El recàlcul de vigència per canvi de franja és **local**: no genera cap petició.
+- **Adaptatiu** amb la font pública: 30 min sense cap episodi obert, 10 min quan n'hi ha
+  algun (§6 de `03-feature-spec.md`). El 10 min només es justifica pel nowcast de temps
+  violent, que només apareix en situacions convectives.
+- Mínim absolut **10 minuts**: `cache-control: max-age=600`. Sondejar més sovint és
+  consumir amplada de banda d'un servei públic per a res.
+- Amb API key, l'interval el marca la quota, mai l'usuari sol.
+- El recàlcul de vigència per canvi de franja és **local**: no genera cap petició. És el
+  que permet que el sondeig sigui lent sense que els events arribin tard.
 
 ---
 
 ## 11. Seguretat i dades
 
-- `comentari`, `llindar`, `meteor_nom` i `descripcio` (CECAT) són **text extern no fiable**:
+- `comentari`, `llindar` i `meteor_nom` són **text extern no fiable**:
   mai `allow_html`, mai interpolació HTML directa. El README ho ha de dir per a qui faci
   targetes Markdown.
 - `diagnostics.py` redacta `latitude`, `longitude` i `api_key` abans d'exportar.
@@ -429,7 +442,9 @@ Casos obligatoris:
 - `test_models.py`: un test per cada trap de `01-data-sources.md` §6.
 - `test_vigencia.py`: canvi de franja a 12:00 UTC, avís que acaba a mitja franja, temps
   violent i la seva finestra de 2 h, horari d'estiu vs hivern.
-- `test_coordinator.py`: alta/pujada/baixada/resolució d'avís i els events corresponents.
+- `test_coordinator.py`: anunci/inici/pujada/baixada/resolució i els seus events; un
+  anunci no es repeteix, una ampliació (`dataEmisio` nou) sí, i arrencar amb avisos ja
+  emesos no dispara cap `announced`.
 - `test_resilience.py`: parse error → fallback → degraded a la tercera; 403 → reauth;
   429 → sense retry.
 - `test_translations.py`: totes les claus presents als tres idiomes.
@@ -453,9 +468,11 @@ Idèntic a `ha-incendiscat`: `ci.yml` (`ruff check .`, `ruff format --check .`,
 | Client dual darrere d'un `Protocol` | El coordinator, els models i les entitats no saben d'on venen les dades; canviar de font és canviar una línia |
 | Grau de perill com a **estat** (`ENUM`), no com a atribut | És el que fa que les automacions siguin trivials. `figorr/meteocat` posa `opened`/`closed` a l'estat i obliga a llegir atributs |
 | Recàlcul de vigència per rellotge cada minut | Les franges de 6 h canvien sense que canviï la font. Sense això, els avisos arriben tard |
+| **Separar `announced` de `started`** | El SMP avisa amb dies d'antelació i només el temps violent és nowcast. Un sol event obligaria a triar entre notificar massa aviat o massa tard. Precedent: `advance`/`current` del `dwd_weather_warnings` de HA core |
+| **Sondeig adaptatiu 30/10 min** | 10 min només cal per al nowcast convectiu; la resta de l'any seria triplicar la càrrega sobre un servei públic per res |
 | Events al bus a més de binary sensors | Patró event-driven de HA; "acaba d'entrar un avís de vent" és un event, no un estat |
 | Multi-entrada (N comarques) | Casa, feina, família. `geosphere_austria_warnings` fa el mateix amb municipis |
 | Taula de comarques incrustada, geometria només al config flow | Zero peticions en runtime, zero dependències, 58 KB fora del repo |
-| CECAT com a coordinator separat i opcional | Autoritat i cadència diferents; una fallada seva no ha d'afectar els avisos |
+| **CECAT en una integració separada (`ha-cecat`)** | Àmbit territorial incompatible (Catalunya sencera vs comarca: N entrades donarien N còpies del mateix INUNCAT), abast natural molt més gran (SISMICAT, TRANSCAT…) i precedent `nina` / `dwd_weather_warnings` a HA core. Detall a `02-existing-integrations.md` §8 |
 | `requirements: []` | Menys superfície de trencament amb els canvis de HA. Mateix criteri que `ha-incendiscat` |
 | Codi en anglès, UI en català | Convenció HA + context d'ús |

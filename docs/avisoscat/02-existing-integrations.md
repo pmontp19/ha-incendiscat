@@ -181,7 +181,46 @@ SMP directament: dades d'una altra agència, granularitat de província i una so
 
 ---
 
-## 5. `aemet` (HA core)
+## 5. Alemanya: `dwd_weather_warnings` + `nina` — el precedent per a la pregunta "una o dues?" ⭐
+
+Alemanya té **les dues integracions per separat a HA core**, i és exactament el mateix
+repartiment institucional que Catalunya:
+
+| | `dwd_weather_warnings` | `nina` |
+| --- | --- | --- |
+| Autoritat | Deutscher Wetterdienst (servei meteorològic) | Bundesamt für Bevölkerungsschutz (protecció civil) |
+| Equivalent català | **Meteocat / SMC** | **CECAT / Protecció Civil** |
+| Abast | Només avisos meteorològics | Agregador: meteo (reenviada del DWD) + inundacions + substàncies perilloses + catàstrofes |
+| Entrades | Una per regió | **`single_config_entry: true`** (àmbit nacional) |
+| Cadència | 15 min | 5 min |
+| Entitats | `current_warning_level` + **`advance_warning_level`** | Binary sensors per regió i per tipus |
+
+Dos aprenentatges directes:
+
+1. **La separació és la norma, no una excentricitat.** El servei meteorològic emet el que
+   preveu; protecció civil decideix si activa un pla. Són autoritats, cadències i cicles de
+   vida diferents, i HA core les modela per separat encara que les dades del DWD
+   *també* apareguin dins de NINA.
+2. **`single_config_entry` a l'agregador de protecció civil.** NINA és nacional; el DWD és
+   per regió. Igual que el CECAT és per a tot Catalunya i el SMP és per comarca — vegeu
+   §8.
+
+I un aprenentatge sobre l'horitzó temporal: el DWD separa **`current_warning_level`**
+(avís en vigor ara) de **`advance_warning_level`** (*Vorabinformation*, avís emès per a un
+període futur). És exactament la distinció que el SMP necessita i que la primera versió
+d'aquesta especificació no feia.
+
+## 6. `caiosweet/DPC-Alert` (Itàlia) — l'altre model
+
+Integració HACS default per al **Dipartimento della Protezione Civile** italià: nivells
+d'alerta (verd/groc/taronja/vermell) per zona, per risc hidrogeològic, hidràulic i
+temporals. És l'equivalent italià del CECAT, i també viu **separada** de qualsevol
+integració del servei meteorològic.
+
+Confirma el mateix patró: les integracions de protecció civil s'organitzen per *pla de
+risc i zona d'emergència*, no per *meteor i comarca*.
+
+## 7. `aemet` (HA core)
 
 Integració oficial d'AEMET OpenData: predicció i observació, **sense avisos**. Incloure'ls
 és una *feature request* oberta i no implementada.
@@ -194,15 +233,74 @@ del Meteocat es tanca.
 
 ---
 
-## 6. Decisions derivades
+## 8. Decisió: Meteocat i Protecció Civil van separats
+
+La pregunta és si el SMP del Meteocat i els plans del CECAT han d'anar en una integració o
+en dues. **Dues**, i aquests són els arguments, ordenats de més a menys decisiu.
+
+### 8.1 L'àmbit territorial no encaixa
+
+El SMP és **per comarca** i la integració és multi-entrada (casa, feina, els pares). El
+CECAT és **per a tot Catalunya**: quan s'activa l'INUNCAT, s'activa i punt. Posar
+`sensor.plans_activats` dins del dispositiu d'una comarca vol dir que un usuari amb tres
+entrades té **tres còpies idèntiques del mateix INUNCAT**, amb tres `unique_id` diferents i
+tres events duplicats a cada canvi de fase.
+
+Això no és un detall estètic: és el motiu pel qual `nina` declara
+`single_config_entry: true` i `dwd_weather_warnings` no. Els dos àmbits són incompatibles
+dins d'una mateixa entrada.
+
+### 8.2 L'abast natural del CECAT és molt més gran que el temps
+
+El dataset `wj9c-j6vf` cobreix **tots** els plans de Protecció Civil, no només els
+meteorològics: INUNCAT (inundacions), VENTCAT (vent), NEUCAT (neu), però també PROCICAT,
+SISMICAT, TRANSCAT (mercaderies perilloses), RADCAT, AEROCAT, INFOCAT… Encabir-ho dins
+d'una integració que es diu "Avisos Meteocat" li posa un sostre artificial: ningú no
+buscarà un sensor sísmic dins d'una integració de temps sever.
+
+El CECAT és, estructuralment, **el NINA català**. Es mereix el seu propi domini
+(`ha-cecat`, "Protecció Civil Catalunya"), amb `single_config_entry: true` i tots els plans.
+
+### 8.3 Autoritats, llicències i modes de fallada diferents
+
+L'SMC depèn del Departament de Territori; el CECAT, del Departament d'Interior. Les dades
+venen de dos serveis sense cap relació tècnica (payload incrustat a `meteo.cat` vs Socrata
+a `transparenciacatalunya.cat`). Que un caigui no hauria de tenir cap efecte sobre l'altre
+— i amb integracions separades això surt de franc, en lloc d'haver-ho de programar.
+
+### 8.4 El precedent és unànime
+
+`dwd_weather_warnings` + `nina` a HA core (§5), i `DPC-Alert` a Itàlia separat de qualsevol
+integració meteorològica (§6). No he trobat cap integració que barregi els dos rols.
+
+### 8.5 Què hi perdem, i per què està bé
+
+L'argument a favor d'ajuntar-les és bo: la cadena **SMC → CECAT → pla** és una sola
+història causal, i l'automació interessant és "avís de pluja alt **i** INUNCAT en alerta".
+Però això no necessita una integració compartida — necessita **dues entitats a la mateixa
+instància de HA**, que és el cas per defecte. Una condició d'automació que creua dos
+dominis és exactament igual de fàcil d'escriure.
+
+### 8.6 Conseqüència per a la v1
+
+El CECAT **surt de l'abast de la v1** d'`ha-avisoscat`. La recerca de la font es conserva a
+[`01-data-sources.md`](01-data-sources.md) §5 perquè és vàlida i costa de refer, i queda
+com a base per a `ha-cecat`, que és una integració petita (un endpoint, sense clau, sense
+quota) i independent.
+
+---
+
+## 9. Decisions derivades
 
 | Decisió | Origen |
 | --- | --- |
 | `SensorDeviceClass.ENUM` amb `options` per al nivell d'avís | `geosphere_austria_warnings` |
 | Vigència "ara" recalculada cada cicle amb el rellotge, no només amb el payload | `geosphere_austria_warnings` + franges de 6 h del SMP |
 | Un sensor per meteor, a més dels agregats | `figorr/meteocat` (però amb el **grau** com a estat, no `opened`/`closed`) |
-| Events al bus per a automacions en temps real | Buit detectat: cap integració catalana en té |
+| **Separar avís emès (`advance`) d'avís en vigor (`current`)** | `dwd_weather_warnings` — i la naturalesa del SMP, que avisa amb dies d'antelació |
+| Events al bus per a automacions | Buit detectat: cap integració catalana en té |
 | Sensor de quota només si hi ha API key | `figorr/meteocat` |
 | Meteor/llindar desconegut → warning + `unknown` | `figorr/meteocat` |
 | Sense dependències de PyPI | `ha-incendiscat` (`requirements: []`) |
 | Multi-entrada (N comarques) | `geosphere_austria_warnings` (N municipis) |
+| **Protecció Civil en una integració separada** | `nina` vs `dwd_weather_warnings`; `DPC-Alert`; §8 |

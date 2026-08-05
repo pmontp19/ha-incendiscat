@@ -17,18 +17,20 @@ T1 Scaffold + CI
     │       │                       ├── T10 Binary sensors
     │       │                       └── T13 Diagnosi + resiliència
     │       └── T4 Vigència (franges de 6 h)        ⚠️ risc alt
-    ├── T6 Comarques + point-in-polygon
-    │       └── T11 Config flow
-    │               └── T12 Options flow + reauth
-    └── T14 CECAT (independent)
-T15 Traduccions      ← (T8–T14)
-T16 Blueprint        ← (T10, T7)
-T17 README + HACS    ← (tot)
+    └── T6 Comarques + point-in-polygon
+            └── T11 Config flow
+                    └── T12 Options flow + reauth
+T14 Traduccions      ← (T8–T13)
+T15 Blueprint        ← (T10, T7)
+T16 README + HACS    ← (tot)
 ```
 
 **Ordre de risc**: T3 (extracció del payload d'una pàgina HTML de tercers) i T4 (lògica de
-vigència per franges) van al principi. Si l'extracció no és robusta o la vigència no
-quadra, ho volem saber abans d'escriure cap entitat.
+vigència i horitzons) van al principi. Si l'extracció no és robusta o la projecció
+"en vigor / anunciat" no quadra, ho volem saber abans d'escriure cap entitat.
+
+Els plans de Protecció Civil **no hi són**: van a `ha-cecat`, una integració separada
+([`02-existing-integrations.md`](02-existing-integrations.md) §8).
 
 ---
 
@@ -85,17 +87,24 @@ retallada però amb el payload intacte).
 `https://www.meteo.cat/observacions/radar` i `https://www.meteo.cat/`.
 **Dependències:** T2. **Mida:** M
 
-### Task 4 — Vigència ⚠️ risc alt
+### Task 4 — Vigència i horitzons ⚠️ risc alt
 
-`vigencia.py`: `periode_actual()`, `afectacions_vigents()`, i el cas especial de
-temps violent (finestra de 2 h des de `dataEmisio`). Tot en UTC.
+`vigencia.py`: `periode_actual()`, `afectacions_vigents()` (en vigor ara),
+`afectacions_anunciades()` (emeses, encara no vigents), `outlook()` (graella dia × franja
+per als 3 dies) i el cas especial de temps violent (finestra de 2 h des de `dataEmisio`).
+Tot en UTC.
+
+És el mòdul que materialitza els dos horitzons del §1.1 de `03-feature-spec.md`.
 
 **Acceptació**
-- [ ] Un avís amb afectació només a `12-18` és vigent a les 13:00 UTC i no a les 11:59
+- [ ] Un avís amb afectació només a `12-18` és **vigent** a les 13:00 UTC, **anunciat** a
+      les 11:59, i cap de les dues coses a les 19:00
 - [ ] Un avís amb `dataFi` a mitja franja deixa de ser vigent a `dataFi`, no al final de
       la franja
 - [ ] La franja `18-00` cobreix de 18:00 a 23:59 UTC
-- [ ] Temps violent: vigent 2 h des de `dataEmisio`, ignorant franges
+- [ ] `outlook()` retorna les 4 franges de cadascun dels 3 dies, amb 0 on no hi ha afectació
+- [ ] `hores_per_endavant` és correcte per a un avís emès avui per a demà passat
+- [ ] Temps violent: vigent 2 h des de `dataEmisio`, ignorant franges, i **mai** anunciat
 - [ ] Els tests fan servir el `FakeClock` de `conftest.py`, mai `freezegun` ni `sleep()`
 
 **Verificació:** `pytest tests/test_vigencia.py`. **Dependències:** T2. **Mida:** M
@@ -138,38 +147,47 @@ casting purs per al config flow; `nom(id)` amb fallback `f"Comarca {id}"`.
 
 ---
 
-## Fase 2 — Slice vertical (avisos en temps real)
+## Fase 2 — Slice vertical (avisos anunciats i en vigor)
 
 ### Task 7 — Coordinator i events
 
 `coordinator.py` (`AvisoscatDataUpdateCoordinator`, §7–§8 de `04-architecture.md`):
-`AvisoscatState`, recàlcul de `vigents` cada cicle, detecció de transicions i emissió dels
-5 events d'avís, conservació de l'estat en cas de fallada, `always_update=False`.
-`__init__.py` amb `async_setup_entry`, `runtime_data` tipat
-(`AvisoscatRuntimeData`) i el `async_track_time_change` d'1 minut que força el recàlcul de
-vigència **sense petició de xarxa**.
+`AvisoscatState` amb `en_vigor` / `anunciats` / `outlook`, els dos bucles d'emissió
+(`_emit_announced` i `_emit_in_force`), conservació de l'estat en cas de fallada,
+`always_update=False`. `__init__.py` amb `async_setup_entry`, `runtime_data` tipat i el
+`async_track_time_change` d'1 minut que força el recàlcul **sense petició de xarxa**.
+Interval adaptatiu 30/10 min segons si hi ha episodis oberts.
 
 **Acceptació**
-- [ ] Alta → `avisoscat_warning_issued`; grau 2→4 → `upgraded`; 4→2 → `downgraded`;
-      desaparició → `cleared` amb `motiu` correcte
+- [ ] Avís nou emès per a demà → `avisoscat_warning_announced` amb `hores_per_endavant`
+      correcte, i **cap** `started`
+- [ ] En arribar la franja → `avisoscat_warning_started` amb `anunciat_amb_hores`
+- [ ] Grau 2→4 → `upgraded`; 4→2 → `downgraded`; desaparició → `cleared` amb `motiu`
+- [ ] El mateix anunci en dos cicles seguits **no** es repeteix; una ampliació
+      (`dataEmisio` nou) **sí**
+- [ ] Arrencar amb avisos ja emesos des de fa dies **no** dispara cap `announced`
 - [ ] `avisoscat_violent_weather` es dispara **un cop per `dataEmisio`**, no cada cicle
-- [ ] Amb un fetch que falla, `state.vigents` es manté i `last_error` s'omple
-- [ ] El canvi de franja a 12:00 UTC genera els events sense cap crida HTTP (test amb
+- [ ] Amb un fetch que falla, `state.en_vigor` es manté i `last_error` s'omple
+- [ ] El canvi de franja a 12:00 UTC genera els events **sense cap crida HTTP** (test amb
       `FakeClock` i `aioresponses` sense mocks nous)
+- [ ] L'interval passa de 30 a 10 min quan apareix el primer episodi obert
 
 **Verificació:** `pytest tests/test_coordinator.py tests/test_events.py`.
 **Dependències:** T4, T5. **Mida:** L (dividir si cal: coordinator / events)
 
 ### Task 8 — Sensors de nivell
 
-`sensor.py`: `nivell_d_avis` (§3.1), `avisos_actius` (§3.2), `grau_maxim_avui` (§3.3),
-`preavis` (§3.5). `entity.py` amb la base i el `DeviceInfo`.
+`sensor.py`: `nivell_d_avis` (§3.1), `avisos_actius` (§3.2), `avis_anunciat` (§3.3), els
+tres `grau_maxim_*` amb la seva graella (§3.4) i `preavis` (§3.6). `entity.py` amb la base
+i el `DeviceInfo`.
 
 **Acceptació**
-- [ ] `nivell_d_avis` és `SensorDeviceClass.ENUM` amb
+- [ ] `nivell_d_avis` i `avis_anunciat` són `SensorDeviceClass.ENUM` amb
       `options=["cap","moderat","alt","molt_alt"]`
-- [ ] Tots els atributs del §3.1 presents quan hi ha avís, i l'estat és `cap` amb atributs
-      buits quan no n'hi ha
+- [ ] Un avís emès per a demà deixa `nivell_d_avis` a `cap` i `avis_anunciat` a `alt` —
+      **el test que evita l'error de disseny del §1.1**
+- [ ] `avis_anunciat` exposa `comenca`, `hores_per_endavant` i `dia`
+- [ ] `grau_maxim_dema.graella` té exactament les 4 franges
 - [ ] `avisos_actius` té `state_class: MEASUREMENT`
 
 **Verificació:** `pytest tests/test_sensor.py`. **Dependències:** T7. **Mida:** M
@@ -188,11 +206,13 @@ Els 10 sensors del §3.4, creats només per als meteors seleccionats a les opcio
 
 ### Task 10 — Binary sensors
 
-`binary_sensor.py`: `avis_actiu`, `avis_greu` (llindar configurable), `temps_violent`
-(§3.8–§3.10). Tots amb `device_class: SAFETY`.
+`binary_sensor.py`: `avis_actiu`, `avis_greu`, `avis_greu_anunciat`, `temps_violent`
+(§3.8–§3.11). Tots amb `device_class: SAFETY`.
 
 **Acceptació**
-- [ ] `avis_greu` respecta `severe_threshold` i canvia en reconfigurar-lo
+- [ ] `avis_greu` i `avis_greu_anunciat` respecten `severe_threshold` i canvien en
+      reconfigurar-lo
+- [ ] Un avís greu per a demà encén `avis_greu_anunciat` i **no** `avis_greu`
 - [ ] `temps_violent` s'apaga sol en passar les 2 h, sense fetch nou
 
 **Verificació:** `pytest tests/test_binary_sensor.py`. **Dependències:** T7. **Mida:** S
@@ -247,27 +267,13 @@ Entitats de diagnòstic del §3.12, `diagnostics.py` amb redacció de `latitude`
 - [ ] 3 `SmpParseError` seguits → un sol event i una *repair issue* amb `learn_more_url`
 - [ ] La 4a fallada **no** repeteix l'event
 - [ ] `diagnostics` no conté mai coordenades ni la clau
-- [ ] Amb `maxConsultes: 100` l'interval efectiu passa a 8 h
+- [ ] Amb `maxConsultes: 100` l'interval efectiu passa a 8 h i el config flow adverteix que
+      el temps violent no arribarà a temps
 
 **Verificació:** `pytest tests/test_resilience.py tests/test_diagnostics.py`.
 **Dependències:** T7. **Mida:** M
 
-### Task 14 — Protecció Civil (CECAT)
-
-`cecat.py` amb `CecatCoordinator` (15 min), `sensor.plans_activats` (§3.7),
-`binary_sensor.proteccio_civil_alerta` (§3.11) i
-`avisoscat_civil_protection_phase_change`. Parseig tolerant de `fasedatahora`
-(`DD/MM/YYYY HH:MM` local). Una fallada seva no fa caure l'entrada.
-
-**Acceptació**
-- [ ] Fixture real `cecat_sample.json` (INUNCAT en ALERTA) parsejada correctament
-- [ ] Llista buida → 0 plans, sense error
-- [ ] `PREALERTA` **no** encén `proteccio_civil_alerta`; `ALERTA` i `EMERGÈNCIA` sí
-- [ ] Amb el CECAT caigut, els sensors d'avisos continuen funcionant
-
-**Verificació:** `pytest tests/test_cecat.py`. **Dependències:** T1. **Mida:** M
-
-### Task 15 — Traduccions
+### Task 14 — Traduccions
 
 `strings.json` + `translations/{ca,es,en}.json` amb clau per a **cada** entitat, camp de
 config flow, opció de selector, error i *repair issue*. Català com a referència.
@@ -278,9 +284,9 @@ config flow, opció de selector, error i *repair issue*. Català com a referènc
       conjunt de claus
 
 **Verificació:** `pytest tests/test_translations.py`; `validate.yml`.
-**Dependències:** T8–T14. **Mida:** M
+**Dependències:** T8–T13. **Mida:** M
 
-### Task 16 — Blueprint
+### Task 15 — Blueprint
 
 `blueprints/automation/avisoscat_warning_notification.yaml` amb les opcions del §5 de
 `03-feature-spec.md`, i un test que en valida l'esquema YAML (com `test_blueprint.py` de
@@ -289,12 +295,15 @@ config flow, opció de selector, error i *repair issue*. Català com a referènc
 **Acceptació**
 - [ ] S'importa sense errors a una instància real
 - [ ] Els filtres per meteor i per grau mínim funcionen
+- [ ] `notify_on: anunciat` no notifica en entrar en vigor, i a l'inrevés
+- [ ] `max_hores_antelacio` descarta els anuncis massa llunyans
+- [ ] El text distingeix anunci ("d'aquí a 41 h") d'entrada en vigor
 - [ ] `critical_alert` genera el payload correcte per a l'app mòbil
 
 **Verificació:** `pytest tests/test_blueprint.py` + import manual.
 **Dependències:** T7, T10. **Mida:** M
 
-### Task 17 — README, marca i release
+### Task 16 — README, marca i release
 
 README en català amb instal·lació, taula d'entitats, taula d'events amb payloads, dashboard
 d'exemple, patrons d'automació, **secció de coexistència amb `figorr/meteocat`**, fonts de
@@ -306,6 +315,11 @@ configurat. Sol·licitud d'alta a HACS default.
       la Generalitat, i que la font sense clau no és una API oficialment suportada
 - [ ] Adverteix de no fer servir `allow_html` amb `comentari`/`llindar`
 - [ ] Explica que els avisos són **per comarca** i què implica
+- [ ] **No diu "temps real" a seques**: explica que els avisos arriben amb hores o dies
+      d'antelació i que només el temps violent és nowcast de minuts
+- [ ] Documenta el cas límit del sondeig adaptatiu (fins a 30 min de retard en la primera
+      vigilància d'un dia sense episodis)
+- [ ] Esmenta `ha-cecat` com a integració germana per als plans de Protecció Civil
 - [ ] Validació HACS verda
 
 **Dependències:** tot. **Mida:** M
@@ -317,13 +331,19 @@ configurat. Sol·licitud d'alta a HACS default.
 - [ ] `ruff check .`, `ruff format --check .`,
       `pytest --cov=custom_components/avisoscat --cov-fail-under=95` en verd
 - [ ] `hassfest` i validació HACS verdes
-- [ ] Provat en una instància real durant **un episodi d'avís real** (idealment amb canvi
-      de franja) i verificat que els events salten quan toca
+- [ ] Provat en una instància real durant **un episodi d'avís real**, verificant per separat
+      l'anunci (hores o dies abans) i l'entrada en vigor (canvi de franja)
 - [ ] Convivència verificada amb `figorr/meteocat` i amb `ha-incendiscat` instal·lats
       alhora
+- [ ] Un nowcast de temps violent real detectat i notificat dins de la seva finestra de 2 h
+      (l'única prova que valida el camí urgent de punta a punta)
 
 ## Fora d'abast (post-v1)
 
+- **Plans de Protecció Civil (CECAT)** → `ha-cecat`, integració germana i separada. Font ja
+  investigada a `01-data-sources.md` §5; raonament a `02-existing-integrations.md` §8. És
+  petita (un endpoint Socrata, sense clau, sense quota) i hauria de cobrir **tots** els
+  plans, no només els meteorològics.
 - Entitat `weather` amb predicció municipal (ja la cobreix `figorr/meteocat`).
 - Avisos d'AEMET com a *fallback* si la font del Meteocat es tanca.
 - `geo_location` amb els polígons de les comarques avisades per pintar-les al mapa.
