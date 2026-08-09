@@ -141,6 +141,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 
+
 class Fase(str, Enum):
     # COM_FASE null -> ACTIU: és com ho renderitza el webmap oficial dels Bombers
     ACTIU = "Actiu"
@@ -150,13 +151,19 @@ class Fase(str, Enum):
 
     @property
     def severity(self) -> int:  # 0..3 per a ordenació de gravetat
-        return {Fase.ACTIU: 3, Fase.ESTABILITZAT: 2,
-                Fase.CONTROLAT: 1, Fase.EXTINGIT: 0}[self]
+        return {
+            Fase.ACTIU: 3,
+            Fase.ESTABILITZAT: 2,
+            Fase.CONTROLAT: 1,
+            Fase.EXTINGIT: 0,
+        }[self]
+
 
 class Tipus(str, Enum):
     FORESTAL = "VF"
     AGRICOLA = "VA"
     URBANA = "VU"
+
 
 @dataclass(frozen=True, slots=True)
 class Incident:
@@ -182,7 +189,9 @@ class Incident:
             act_num=p.get("ACT_NUM_ACTUACIO", ""),
             lat=float(lat) if lat is not None else 0.0,
             lon=float(lon) if lon is not None else 0.0,
-            fase=_parse_fase(p.get("COM_FASE")),  # null -> Fase.ACTIU (com el visor oficial)
+            fase=_parse_fase(
+                p.get("COM_FASE")
+            ),  # null -> Fase.ACTIU (com el visor oficial)
             tipus=Tipus(p.get("TAL_COD_ALARMA2") or "VF"),
             tipus_desc=p.get("TAL_DESC_ALARMA2", ""),
             municipi=p.get("MUNICIPI_SIG") or p.get("MUNICIPI_DPX"),
@@ -208,13 +217,13 @@ Convencions actuals: el coordinator es guarda a **`entry.runtime_data`** amb ali
 ```python
 @dataclass
 class IncendiscatState:
-    incidents: dict[str, Incident]          # act_num -> Incident (actius tracked)
-    last_edit_date: datetime | None         # per sync incremental
+    incidents: dict[str, Incident]  # act_num -> Incident (actius tracked)
+    last_edit_date: datetime | None  # per sync incremental
     last_success: datetime | None
     last_error: str | None
     # Snapshots per detectar canvis
-    prev_fases: dict[str, Fase]             # act_num -> fase del cicle anterior
-    prev_act_nums: set[str]                 # per detectar altes i baixes
+    prev_fases: dict[str, Fase]  # act_num -> fase del cicle anterior
+    prev_act_nums: set[str]  # per detectar altes i baixes
 ```
 
 ### Lògica d'actualització
@@ -222,7 +231,9 @@ class IncendiscatState:
 ```python
 async def _async_update_data(self) -> IncendiscatState:
     try:
-        nous_i_modificats = await fetch_incidents(self.session, since=state.last_edit_date)
+        nous_i_modificats = await fetch_incidents(
+            self.session, since=state.last_edit_date
+        )
     except ClientError as e:
         # No esborrem res, marquem error
         state.last_error = str(e)
@@ -241,8 +252,9 @@ async def _async_update_data(self) -> IncendiscatState:
     # 3. Netejar extingits antics
     _cleanup_resolved(state, grace_minutes=60)
 
-    state.last_edit_date = max((i.edit_date for i in state.incidents.values()),
-                                default=state.last_edit_date)
+    state.last_edit_date = max(
+        (i.edit_date for i in state.incidents.values()), default=state.last_edit_date
+    )
     state.last_success = utcnow()
     state.last_error = None
     return state
@@ -278,21 +290,32 @@ def _emit_events(hass, state, modified):
         act = inc.act_num
         # 1. Nou detectat
         if act not in state.prev_act_nums and _is_in_state(state, act):
-            hass.bus.async_fire("incendiscat_fire_detected", _payload_detected(inc, home))
+            hass.bus.async_fire(
+                "incendiscat_fire_detected", _payload_detected(inc, home)
+            )
         # 2. Canvi de fase
         old = state.prev_fases.get(act)
         if old and old != inc.fase:
-            hass.bus.async_fire("incendiscat_phase_change", {
-                "act_num": act, "municipi": inc.municipi,
-                "old_fase": old.value, "new_fase": inc.fase.value,
-                "distance_km": _dist(inc, home),
-            })
+            hass.bus.async_fire(
+                "incendiscat_phase_change",
+                {
+                    "act_num": act,
+                    "municipi": inc.municipi,
+                    "old_fase": old.value,
+                    "new_fase": inc.fase.value,
+                    "distance_km": _dist(inc, home),
+                },
+            )
     # 3. Resolts (eren tracked, ja no hi són o han passat a Extingit)
-    for act in state.prev_act_nums - {i.act_num for i in modified if _is_in_state(state, act)}:
+    for act in state.prev_act_nums - {
+        i.act_num for i in modified if _is_in_state(state, act)
+    }:
         # era tracked i ha desaparegut
         prev_inc = state._snapshot.get(act)
         if prev_inc:
-            hass.bus.async_fire("incendiscat_fire_resolved", _payload_resolved(prev_inc))
+            hass.bus.async_fire(
+                "incendiscat_fire_resolved", _payload_resolved(prev_inc)
+            )
     # Snapshot pel següent cicle
     state.prev_act_nums = {i.act_num for i in state.incidents.values()}
     state.prev_fases = {i.act_num: i.fase for i in state.incidents.values()}
@@ -314,7 +337,7 @@ Cada `entity.py` té:
 ```python
 class IncendiscatEntity(CoordinatorEntity[IncendiscatState]):
     _attr_has_entity_name = True
-    _attr_translation_key = "..."   # per a multi-idioma
+    _attr_translation_key = "..."  # per a multi-idioma
 
     def __init__(self, coordinator, config_entry):
         super().__init__(coordinator)
