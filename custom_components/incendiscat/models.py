@@ -119,6 +119,39 @@ def _parse_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def incident_key(props: dict[str, Any]) -> str:
+    """Stable per-incident identifier, used for `Incident.act_num`, dedup
+    (`arcgis.py`'s `_dedupe_features`) and the `geo_location` unique_id.
+
+    Prefers `ACT_NUM_ACTUACIO`, the FeatureServer's documented primary key
+    (docs/01-data-sources.md §2, marked ⭐). Verified live 2026-08-09: the
+    view stopped exposing this field entirely -- it is silently dropped even
+    when requested explicitly via `outFields`, the same failure mode already
+    known for `EditDate` (see arcgis.py's module docstring) -- which would
+    otherwise make every row look keyless and get discarded by
+    `_dedupe_features`, silently zeroing out incident tracking without a
+    single HTTP error or a change to `binary_sensor.servei_connectat`.
+
+    Falls back to a composite of municipi + start timestamp: neither changes
+    for the life of an incident, so it stays stable across the append-only
+    snapshot log's repeated rows for the same `act_num` (docs/01-data-sources.md
+    §2). As a last resort (municipi also missing) falls back to
+    `OBJECTID`/`GlobalID`, which are per-row rather than per-incident but
+    still better than dropping the row outright.
+    """
+    act_num = props.get("ACT_NUM_ACTUACIO")
+    if act_num:
+        return str(act_num)
+
+    municipi = props.get("MUNICIPI_SIG") or props.get("MUNICIPI_DPX")
+    inici = props.get("ACT_DAT_INICI")
+    if municipi and inici:
+        return f"{municipi}|{inici}"
+
+    fallback = props.get("OBJECTID") or props.get("GlobalID")
+    return str(fallback) if fallback else ""
+
+
 @dataclass(frozen=True, slots=True)
 class Incident:
     """A single wildfire incident, deduped to its current known state."""
@@ -156,18 +189,20 @@ class Incident:
         lon = coordinates[0] if len(coordinates) > 0 else None
         lat = coordinates[1] if len(coordinates) > 1 else None
 
+        key = incident_key(props)
+
         parsed_lat = _parse_float(lat)
         parsed_lon = _parse_float(lon)
         if parsed_lat is None or parsed_lon is None:
             _LOGGER.warning(
-                "Missing/unparseable coordinates for ACT_NUM_ACTUACIO %r"
+                "Missing/unparseable coordinates for incident %r"
                 " (geometry=%r), defaulting to (0.0, 0.0)",
-                props.get("ACT_NUM_ACTUACIO"),
+                key,
                 geometry,
             )
 
         return cls(
-            act_num=str(props.get("ACT_NUM_ACTUACIO") or ""),
+            act_num=key,
             lat=parsed_lat or 0.0,
             lon=parsed_lon or 0.0,
             fase=_parse_fase(props.get("COM_FASE")),

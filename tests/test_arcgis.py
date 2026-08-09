@@ -132,6 +132,57 @@ def test_dedup_helper_falls_back_to_edit_date_on_tie() -> None:
     assert result == [b]
 
 
+def test_dedup_uses_fallback_key_when_act_num_actuacio_missing() -> None:
+    """Live schema break (verified 2026-08-09, docs/01-data-sources.md §2):
+    ACT_NUM_ACTUACIO can vanish from the FeatureServer entirely. Rows must
+    still dedup by the models.incident_key fallback instead of all being
+    discarded (previously `if not act_num: continue` dropped every row)."""
+    older = {
+        "properties": {
+            "MUNICIPI_SIG": "Beuda",
+            "ACT_DAT_INICI": 1786169257000,
+            "DATA_ACT": 100,
+        }
+    }
+    newer = {
+        "properties": {
+            "MUNICIPI_SIG": "Beuda",
+            "ACT_DAT_INICI": 1786169257000,
+            "DATA_ACT": 200,
+        }
+    }
+    result = _dedupe_features([older, newer])
+    assert result == [newer]
+
+
+async def test_fetch_incidents_survives_missing_act_num_actuacio_schema() -> None:
+    """fetch_incidents must not silently return [] for every incident just
+    because ACT_NUM_ACTUACIO disappeared from the schema."""
+    broken_schema_response = {
+        "type": "FeatureCollection",
+        "properties": {"exceededTransferLimit": False},
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [1.0, 42.0]},
+                "properties": {
+                    "MUNICIPI_SIG": "Vielha e Mijaran",
+                    "ACT_DAT_INICI": 1785515286000,
+                    "COM_FASE": "Controlat",
+                    "OBJECTID": 1092748,
+                },
+            }
+        ],
+    }
+    with aioresponses() as mocked:
+        mocked.get(QUERY_URL_PATTERN, payload=broken_schema_response)
+        async with aiohttp.ClientSession() as session:
+            incidents = await fetch_incidents(session)
+
+    assert len(incidents) == 1
+    assert incidents[0].act_num == "Vielha e Mijaran|1785515286000"
+
+
 # ---------------------------------------------------------------------------
 # Incremental sync
 # ---------------------------------------------------------------------------
