@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/pmontp19/ha-incendiscat/compare/ha-incendiscat-v0.3.2...ha-incendiscat-v0.3.3) (2026-08-09)
+
+
+### Bug Fixes
+
+* fall back to composite key when ACT_NUM_ACTUACIO is missing ([5539e89](https://github.com/pmontp19/ha-incendiscat/commit/5539e89c29b97d81387d750185f8a7ccc15f723b))
+
 ## [0.3.2](https://github.com/pmontp19/ha-incendiscat/compare/ha-incendiscat-v0.3.1...ha-incendiscat-v0.3.2) (2026-07-15)
 
 
