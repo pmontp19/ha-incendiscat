@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from custom_components.incendiscat.models import Fase, Incident, Tipus
+from custom_components.incendiscat.models import Fase, Incident, Tipus, incident_key
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 
@@ -241,3 +241,73 @@ def test_duplicates_fixture_both_rows_parse() -> None:
     assert {i.act_num for i in incidents} == {"999000001"}
     # One row has COM_FASE=null (-> Actiu), the other has COM_FASE="Actiu".
     assert {i.fase for i in incidents} == {Fase.ACTIU}
+
+
+# ---------------------------------------------------------------------------
+# incident_key — fallback when ACT_NUM_ACTUACIO is missing from the schema
+# (verified live 2026-08-09, docs/01-data-sources.md §2)
+# ---------------------------------------------------------------------------
+
+
+def test_incident_key_prefers_act_num_actuacio() -> None:
+    props = {
+        "ACT_NUM_ACTUACIO": "262311630",
+        "MUNICIPI_SIG": "Sant Quirze Safaja",
+        "ACT_DAT_INICI": 1782300143000,
+        "OBJECTID": 1063216,
+    }
+    assert incident_key(props) == "262311630"
+
+
+def test_incident_key_falls_back_to_municipi_and_inici() -> None:
+    props = {
+        "MUNICIPI_SIG": "Beuda",
+        "ACT_DAT_INICI": 1786169257000,
+        "OBJECTID": 1098362,
+    }
+    assert incident_key(props) == "Beuda|1786169257000"
+
+
+def test_incident_key_fallback_uses_municipi_dpx_when_sig_missing() -> None:
+    props = {"MUNICIPI_DPX": "Girona", "ACT_DAT_INICI": 123}
+    assert incident_key(props) == "Girona|123"
+
+
+def test_incident_key_falls_back_to_objectid_when_municipi_missing() -> None:
+    props = {"ACT_DAT_INICI": 123, "OBJECTID": 1098362}
+    assert incident_key(props) == "1098362"
+
+
+def test_incident_key_falls_back_to_global_id_when_objectid_missing() -> None:
+    props = {"GlobalID": "27a255d0-c5d2-41b2-9a8b-0bb9fe90d1f5"}
+    assert incident_key(props) == "27a255d0-c5d2-41b2-9a8b-0bb9fe90d1f5"
+
+
+def test_incident_key_empty_when_nothing_identifying_is_present() -> None:
+    assert incident_key({}) == ""
+
+
+def test_incident_key_stable_across_repeated_snapshot_rows() -> None:
+    """Two snapshot rows for the same incident (differing only in the fields
+    an edit changes) must still collapse to one dedup key."""
+    first = {"MUNICIPI_SIG": "Beuda", "ACT_DAT_INICI": 1786169257000, "ACT_NUM_VEH": 0}
+    second = {"MUNICIPI_SIG": "Beuda", "ACT_DAT_INICI": 1786169257000, "ACT_NUM_VEH": 3}
+    assert incident_key(first) == incident_key(second)
+
+
+def test_from_feature_uses_fallback_key_when_act_num_actuacio_missing() -> None:
+    """End-to-end: a feature from a FeatureServer that no longer exposes
+    ACT_NUM_ACTUACIO must still get a non-empty, usable act_num instead of
+    being silently unidentifiable (see arcgis.py's _dedupe_features)."""
+    feature = {
+        "geometry": {"coordinates": [2.94417396346624, 42.2670258516484]},
+        "properties": {
+            "MUNICIPI_SIG": "Mont-ral",
+            "ACT_DAT_INICI": 1785844601000,
+            "COM_FASE": "Controlat",
+            "OBJECTID": 1095455,
+        },
+    }
+    inc = Incident.from_feature(feature)
+    assert inc.act_num == "Mont-ral|1785844601000"
+    assert inc.municipi == "Mont-ral"

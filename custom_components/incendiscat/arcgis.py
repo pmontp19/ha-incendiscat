@@ -16,10 +16,11 @@ docs/04-architecture.md §2 — `requirements: []`). Responsibilities:
    `coordinator.py`'s module docstring and `_prune_vanished`). `since` is
    kept working here (and tested) since it is harmless and may still be
    useful for a larger dataset in the future.
-3. De-dup — the view is an append-only snapshot log: one
-   `ACT_NUM_ACTUACIO` can have 2+ rows (see docs/01-data-sources.md §2). We
-   collapse to one row per incident, keeping the one with the highest
-   `DATA_ACT` (falling back to `EditDate` to break ties).
+3. De-dup — the view is an append-only snapshot log: one incident (keyed by
+   `models.incident_key`, normally `ACT_NUM_ACTUACIO`) can have 2+ rows (see
+   docs/01-data-sources.md §2). We collapse to one row per incident, keeping
+   the one with the highest `DATA_ACT` (falling back to `EditDate` to break
+   ties).
 4. Retries — timeout/5xx get 3 retries with exponential backoff (1s/2s/4s);
    4xx errors are not retried (they usually mean the schema/URL changed).
 
@@ -44,7 +45,7 @@ from typing import Any
 import aiohttp
 
 from .const import BOMBERS_LIVE_URL
-from .models import Incident
+from .models import Incident, incident_key
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -214,25 +215,28 @@ async def _fetch_page(
 
 
 def _dedupe_features(features: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Collapse the append-only snapshot log to one row per `ACT_NUM_ACTUACIO`.
+    """Collapse the append-only snapshot log to one row per incident.
 
-    Keeps the row with the highest `DATA_ACT`, falling back to `EditDate` to
-    break ties (or when `DATA_ACT` is missing).
+    Groups by `models.incident_key` (normally `ACT_NUM_ACTUACIO`, with
+    fallbacks for when that field is missing from the schema -- see its
+    docstring) and, within each group, keeps the row with the highest
+    `DATA_ACT`, falling back to `EditDate` to break ties (or when `DATA_ACT`
+    is missing).
     """
     best: dict[str, dict[str, Any]] = {}
     best_sort_key: dict[str, tuple[int, int]] = {}
 
     for feature in features:
         props = feature.get("properties") or {}
-        act_num = props.get("ACT_NUM_ACTUACIO")
-        if not act_num:
+        key = incident_key(props)
+        if not key:
             continue
         sort_key = (props.get("DATA_ACT") or 0, props.get("EditDate") or 0)
-        if act_num not in best or sort_key > best_sort_key[act_num]:
-            best[act_num] = feature
-            best_sort_key[act_num] = sort_key
+        if key not in best or sort_key > best_sort_key[key]:
+            best[key] = feature
+            best_sort_key[key] = sort_key
 
-    return [best[act_num] for act_num in sorted(best)]
+    return [best[key] for key in sorted(best)]
 
 
 async def fetch_incidents(
