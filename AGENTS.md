@@ -1,29 +1,27 @@
-# Instruccions per a agents
+# Agent instructions for ha-incendiscat
 
-Regles operatives per treballar en aquest repositori. Descripció del projecte, entitats, config flow, etc. → `README.md`. Detall arquitectural → `docs/`.
+Operational rules for working in this repo. For project description, entities, config flow, etc. see `README.md`. For architectural detail see `docs/`. General contribution conventions (environment setup, commit format, release cycle, test conventions, CI gates) live in `CONTRIBUTING.md`; this file only captures what is specific to ha-incendiscat.
 
 ## Commits
 
-- Conventional Commits estricte (`feat:`, `fix:`, `fix!:`, `docs:`, `chore:`, `refactor:`, `test:`, `ci:`) — `release-please` en depèn per calcular versió i changelog; un subjecte mal format queda fora del release. Detall a `CONTRIBUTING.md`.
-- No referenciïs números de tasca del pla (`T14`, `Task 5`) ni a commits ni a comentaris de codi — expliquen el *perquè*, no l'origen; el pla evoluciona i la referència queda òrfena.
-- Mai editis a mà `version` a `pyproject.toml` o `custom_components/incendiscat/manifest.json` — només `release-please` els toca.
+See `CONTRIBUTING.md` §"Missatges de commit" and §"Cicle de release" for the Conventional Commits format, the no-task-number rule, and the rule that `version` in `pyproject.toml` and `custom_components/incendiscat/manifest.json` is owned by release-please.
 
-## Codi
+## Code
 
-- Comentaris/identificadors en anglès. Strings de cara a l'usuari (config flow, noms d'entity) via `_attr_translation_key` + `translations/{ca,es,en}.json` — català és la llengua de referència. Qualsevol entity o camp de config flow nou necessita clau a **els tres** fitxers o `hassfest` falla.
-- Estat de la integració a `entry.runtime_data` (alias tipat `IncendiscatConfigEntry`), mai a `hass.data[DOMAIN]`.
-- `DeviceInfo.entry_type=SERVICE` — és un servei cloud, no un dispositiu físic.
-- Dades del FeatureServer ArcGIS (Bombers/Pla Alfa) no són d'una API oficial i poden canviar sense avís: accedeix a camps amb `.get()` + valor per defecte, mai indexació directa; qualsevol canvi ha de mantenir aquesta tolerància (docs/04-architecture.md §9).
-- Camps de text externs (`municipi`, `tipus_desc`, etc.) són no fiables: mai `allow_html` ni interpolació HTML directa. Diagnostics ha de seguir redactant `latitude`/`longitude` abans d'exportar.
-- Integració config-flow-only — no reintrodueixis suport YAML (`configuration.yaml`).
+- Comments and identifiers in English. User-facing strings (config flow, entity names) go through `_attr_translation_key` + `translations/{ca,es,en}.json`; Catalan is the reference language. Any new entity or config-flow field needs a key in **all three** files or `hassfest` fails.
+- Integration state lives in `entry.runtime_data` (typed alias `IncendiscatConfigEntry`), never in `hass.data[DOMAIN]`.
+- `DeviceInfo.entry_type=SERVICE` (cloud service, not a physical device).
+- ArcGIS FeatureServer data (Bombers/Pla Alfa) is not from an official API and may change without notice: read fields with `.get()` + default, never direct indexing; any change must preserve this tolerance (docs/04-architecture.md §9).
+- External text fields (`municipi`, `tipus_desc`, etc.) are untrusted: never `allow_html` or interpolate HTML directly. Diagnostics must keep redacting `latitude`/`longitude` before export.
+- Integration is config-flow-only; do not reintroduce YAML (`configuration.yaml`) support.
 
-## Tests
+## Tests, coverage, and CI gates
 
-- `pytest-homeassistant-custom-component` + `aioresponses`; zero xarxa real en tests.
-- Lògica dependent del rellotge → fixture `clock` (`FakeClock` a `tests/conftest.py`), no `sleep()` real ni `freezegun`.
-- Cobertura mínima 95% (`--cov-fail-under=95`, igual que CI) — comprova-ho abans de fer push.
-- Fixtures ArcGIS a `tests/fixtures/` han de ser respostes reals capturades, no inventades.
+See `CONTRIBUTING.md` §"Tests" for test conventions (pytest-homeassistant-custom-component + aioresponses, the `clock` fixture, real ArcGIS fixtures at `tests/fixtures/`) and §"Entorn de desenvolupament" for the 95% coverage gate and the exact `ruff`/`pytest` commands that mirror `ci.yml`/`validate.yml`.
 
-## Abans d'obrir/actualitzar una PR
+## Maintaining this file
 
-`ruff check .`, `ruff format --check .` i `pytest --cov=custom_components/incendiscat --cov-fail-under=95` en verd — són exactament les gates de `ci.yml`/`validate.yml`.
+Keep this file for knowledge useful to almost every future agent session in this project.
+Do not repeat what the codebase already shows; point to the authoritative file or command instead.
+Prefer rewriting or pruning existing entries over appending new ones.
+When updating this file, preserve this bar for all agents and keep entries concise.
