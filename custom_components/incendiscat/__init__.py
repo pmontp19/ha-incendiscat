@@ -47,39 +47,67 @@ __all__ = ["DOMAIN", "IncendiscatConfigEntry"]
 async def async_setup_entry(hass: HomeAssistant, entry: IncendiscatConfigEntry) -> bool:
     """Set up incendiscat from a config entry.
 
-    `async_config_entry_first_refresh()` runs the first poll synchronously
-    and raises `ConfigEntryNotReady` on failure (network error, FeatureServer
-    down, ...), which is exactly the "fail setup cleanly, let HA retry
-    later" behavior expected — we do not need to catch anything here.
+    Startup-latency strategy (deviation from the previous behavior, where
+    both coordinators' first refreshes ran serially inside setup and, with
+    slow DNS, could block HA's boot for 2-4 minutes — each fetch burns up
+    to ~127s of retries and the second coordinator waited for the first):
 
-    The Pla Alfa coordinator is set up the same way, *except* a
-    failed first refresh must not abort the whole entry: fire monitoring is
-    the integration's core value and Pla Alfa is a best-effort bonus, so we
-    catch `ConfigEntryNotReady` from it, log, and continue — `fire_risk`/
-    `high_risk` simply come up `unavailable` (their `CoordinatorEntity`
-    `available` follows `coordinator.last_update_success`, which is `False`
-    here) until the next successful poll, `PLA_ALFA_SCAN_INTERVAL_HOURS`
-    later. Polling still resumes on that schedule because
-    `DataUpdateCoordinator` reschedules its next refresh as soon as its
-    first listener (the `fire_risk`/`high_risk` entities, added below by
-    `async_forward_entry_setups`) subscribes, regardless of whether the
-    *previous* refresh succeeded.
+    - The Bombers first refresh stays synchronous
+      (`async_config_entry_first_refresh()`, the canonical HA pattern: it
+      runs the first poll and raises `ConfigEntryNotReady` on failure, so
+      HA retries setup later), but its fetch runs with a reduced retry
+      schedule — one retry instead of three, see
+      `arcgis.FIRST_RETRY_BACKOFFS_SECONDS`. A dead network now fails in
+      ~61s instead of ~127s; scheduled polls keep the full ladder.
+
+    - The Pla Alfa first refresh no longer blocks setup at all: it runs as
+      an entry-owned background task
+      (`ConfigEntry.async_create_background_task` — the HA-native way to
+      tie a task to the entry's lifecycle: auto-cancelled on unload, does
+      not hold up startup). Until it completes, `fire_risk`/`high_risk`
+      come up `unavailable` (their `CoordinatorEntity.available` follows
+      `coordinator.last_update_success`, `False` until the first
+      successful poll) — a few minutes of unavailability for a
+      best-effort dataset instead of minutes of blocked boot. The eager
+      start (the default) is what keeps `async_config_entry_first_refresh`
+      legal here: it validates the config entry is still in
+      `SETUP_IN_PROGRESS`, and an eagerly-started task begins executing
+      while `async_setup_entry` is still on the stack, only suspending at
+      the first network await.
+
+    A failed Pla Alfa first refresh still must not abort the whole entry:
+    fire monitoring is the integration's core value and Pla Alfa is a
+    best-effort bonus, so the task catches `ConfigEntryNotReady`, logs,
+    and moves on — the entities stay `unavailable` until the next
+    successful poll, `PLA_ALFA_SCAN_INTERVAL_HOURS` later. Polling still
+    resumes on that schedule because `DataUpdateCoordinator` reschedules
+    its next refresh as soon as its first listener (the `fire_risk`/
+    `high_risk` entities, added below by `async_forward_entry_setups`)
+    subscribes, regardless of whether the *previous* refresh succeeded.
     """
     session = async_get_clientsession(hass)
     coordinator = IncendiscatDataUpdateCoordinator(hass, entry, session)
     await coordinator.async_config_entry_first_refresh()
 
     pla_alfa_coordinator = PlaAlfaCoordinator(hass, entry, session)
-    try:
-        await pla_alfa_coordinator.async_config_entry_first_refresh()
-    except ConfigEntryNotReady as err:
-        _LOGGER.warning(
-            "Pla Alfa fire-risk data unavailable on startup (%s); "
-            "fire_risk/high_risk will show as unavailable until the next "
-            "successful poll. Wildfire monitoring is unaffected.",
-            err,
-        )
     coordinator.pla_alfa = pla_alfa_coordinator
+
+    async def _pla_alfa_first_refresh() -> None:
+        try:
+            await pla_alfa_coordinator.async_config_entry_first_refresh()
+        except ConfigEntryNotReady as err:
+            _LOGGER.warning(
+                "Pla Alfa fire-risk data unavailable on startup (%s); "
+                "fire_risk/high_risk will show as unavailable until the next "
+                "successful poll. Wildfire monitoring is unaffected.",
+                err,
+            )
+
+    entry.async_create_background_task(
+        hass,
+        _pla_alfa_first_refresh(),
+        "pla alfa first refresh",
+    )
 
     entry.runtime_data = coordinator
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))

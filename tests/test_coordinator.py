@@ -620,3 +620,40 @@ def test_from_entry_reads_min_age_option() -> None:
     cfg = IncendiscatRuntimeConfig.from_entry(entry)
 
     assert cfg.min_age_min == 20
+
+
+# ---------------------------------------------------------------------------
+# First-fetch fast-fail (startup latency)
+# ---------------------------------------------------------------------------
+
+
+async def test_first_fetch_uses_reduced_retries_once(hass: HomeAssistant) -> None:
+    """Only the coordinator's first fetch passes first=True (the reduced
+    one-retry schedule, see arcgis.FIRST_RETRY_BACKOFFS_SECONDS); every
+    later fetch goes back to the full retry ladder."""
+    coordinator = _coordinator(hass)
+    with patch(
+        "custom_components.incendiscat.coordinator.fetch_incidents",
+        AsyncMock(side_effect=[[], []]),
+    ) as mock_fetch:
+        await coordinator.async_refresh()
+        await coordinator.async_refresh()
+
+    assert [c.kwargs["first"] for c in mock_fetch.call_args_list] == [True, False]
+
+
+async def test_first_fetch_flag_consumed_even_when_fetch_fails(
+    hass: HomeAssistant,
+) -> None:
+    """The one-shot first-fetch flag must not survive a failed first fetch:
+    the next (scheduled) poll already uses the full retry ladder."""
+    coordinator = _coordinator(hass)
+    with patch(
+        "custom_components.incendiscat.coordinator.fetch_incidents",
+        AsyncMock(side_effect=[ArcgisClientError("unreachable"), []]),
+    ) as mock_fetch:
+        await coordinator.async_refresh()
+        assert coordinator.last_update_success is False
+        await coordinator.async_refresh()
+
+    assert [c.kwargs["first"] for c in mock_fetch.call_args_list] == [True, False]

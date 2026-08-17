@@ -537,6 +537,14 @@ class IncendiscatDataUpdateCoordinator(DataUpdateCoordinator[IncendiscatState]):
         )
         self._session = session
         self._resolved_grace_minutes = resolved_grace_minutes
+        # One-shot flag consumed by `_async_update_data`: only the first
+        # fetch after startup uses the reduced retry schedule
+        # (`arcgis.FIRST_RETRY_BACKOFFS_SECONDS`, one retry instead of
+        # three) so a dead network fails the first refresh -- and surfaces
+        # `ConfigEntryNotReady` to HA -- in ~61s instead of ~127s, keeping
+        # the setup-blocking window short. A setup retry builds a fresh
+        # coordinator (fresh `True`), so every blocked-boot fetch is fast.
+        self._first_refresh = True
         # Companion Pla Alfa coordinator, attached by `async_setup_entry`
         # right after both coordinators are built. Declared here as a typed
         # attribute instead of a dynamic one; TYPE_CHECKING-only import
@@ -567,11 +575,20 @@ class IncendiscatDataUpdateCoordinator(DataUpdateCoordinator[IncendiscatState]):
         is_first_refresh = previous is None
         cfg = self.config
 
+        # Consume the one-shot flag *before* awaiting so a failed first
+        # fetch also counts as used: every subsequent fetch (scheduled
+        # polls) goes back to the full 4-attempt retry ladder, and only a
+        # brand-new coordinator (a setup retry) fast-fails again.
+        first_fetch = self._first_refresh
+        self._first_refresh = False
+
         try:
             # Always a full fetch (since=None): see the module docstring's
             # "Sync strategy" section for why an incremental cursor can
             # never observe a deletion against this particular view.
-            fetched = await fetch_incidents(self._session, since=None)
+            fetched = await fetch_incidents(
+                self._session, since=None, first=first_fetch
+            )
         except ArcgisClientError as err:
             if previous is not None:
                 # Mutate in place: self.data keeps this same object (HA does
