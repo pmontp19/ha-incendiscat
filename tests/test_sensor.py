@@ -96,7 +96,7 @@ async def test_empty_data_defaults(hass: HomeAssistant) -> None:
         entry = await _setup(hass)
 
     assert _state(hass, entry, "active_fires").state == "0"
-    assert _state(hass, entry, "nearest_fire_distance").state == "-1"
+    assert _state(hass, entry, "nearest_fire_distance").state == "unknown"
     assert _state(hass, entry, "nearest_fire_municipi").state == "—"
     assert _state(hass, entry, "fires_per_fase").state == "0"
     assert _state(hass, entry, "fires_per_tipus").state == "0"
@@ -170,7 +170,7 @@ async def test_active_fires_excludes_grace_period_extingit(
     # Still tracked (grace period) but no longer "active".
     assert "1" in entry.runtime_data.data.incidents
     assert _state(hass, entry, "active_fires").state == "0"
-    assert _state(hass, entry, "nearest_fire_distance").state == "-1"
+    assert _state(hass, entry, "nearest_fire_distance").state == "unknown"
     assert _state(hass, entry, "nearest_fire_municipi").state == "—"
     # fires_per_fase / total_vehicles still count it (tracked, not active).
     assert _state(hass, entry, "fires_per_fase").state == "1"

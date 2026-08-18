@@ -106,7 +106,7 @@ Attributes: `last_updated`, `total_in_track_radius`, `total_in_alert_radius`.
 
 ### 3.3 `sensor.incendiscat_nearest_fire_distance`
 
-State: km (float, 1 decimal) a l'incendi actiu més proper dins del radi de seguiment. `-1` si no n'hi ha cap.
+State: km (float, 1 decimal) a l'incendi actiu més proper dins del radi de seguiment. `unknown` (`None`) si no n'hi ha cap.
 
 ### 3.4 `sensor.incendiscat_nearest_fire_municipi`
 

@@ -102,7 +102,7 @@ T16 README + release HACS ← (tot)
 
 **Criteris d'acceptació:**
 - [ ] Els 3 sensors apareixen sota el dispositiu "Incendis Catalunya" amb estats correctes segons fixtures
-- [ ] Sense incendis: `active_fires=0`, `distance=-1`, `municipi="—"`
+- [ ] Sense incendis: `active_fires=0`, `distance=unknown`, `municipi="—"`
 
 **Verificació:** `pytest tests/test_sensor.py`; comprovació manual a HA dev.
 **Dependències:** T5. **Mida:** S
