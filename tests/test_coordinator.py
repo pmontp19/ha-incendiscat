@@ -10,12 +10,17 @@ covered separately in `test_events.py`.
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from custom_components.incendiscat.arcgis import ArcgisClientError
+from custom_components.incendiscat.arcgis import (
+    FIRST_REFRESH_BACKOFFS_SECONDS,
+    RETRY_BACKOFFS_SECONDS,
+    ArcgisClientError,
+)
 from custom_components.incendiscat.const import (
     CONF_ACTIVE_PHASES,
     CONF_MIN_AGE,
@@ -627,10 +632,12 @@ def test_from_entry_reads_min_age_option() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def test_first_fetch_uses_reduced_retries_once(hass: HomeAssistant) -> None:
-    """Only the coordinator's first fetch passes first=True (the reduced
-    one-retry schedule, see arcgis.FIRST_RETRY_BACKOFFS_SECONDS); every
-    later fetch goes back to the full retry ladder."""
+async def test_first_fetch_skips_retries_then_restores_full_ladder(
+    hass: HomeAssistant,
+) -> None:
+    """Only the coordinator's first fetch (the one HA's boot waits for) runs
+    without in-client retries; every later fetch goes back to the full
+    ladder."""
     coordinator = _coordinator(hass)
     with patch(
         "custom_components.incendiscat.coordinator.fetch_incidents",
@@ -639,7 +646,10 @@ async def test_first_fetch_uses_reduced_retries_once(hass: HomeAssistant) -> Non
         await coordinator.async_refresh()
         await coordinator.async_refresh()
 
-    assert [c.kwargs["first"] for c in mock_fetch.call_args_list] == [True, False]
+    assert [c.kwargs["backoffs"] for c in mock_fetch.call_args_list] == [
+        FIRST_REFRESH_BACKOFFS_SECONDS,
+        RETRY_BACKOFFS_SECONDS,
+    ]
 
 
 async def test_first_fetch_flag_consumed_even_when_fetch_fails(
@@ -656,4 +666,35 @@ async def test_first_fetch_flag_consumed_even_when_fetch_fails(
         assert coordinator.last_update_success is False
         await coordinator.async_refresh()
 
-    assert [c.kwargs["first"] for c in mock_fetch.call_args_list] == [True, False]
+    assert [c.kwargs["backoffs"] for c in mock_fetch.call_args_list] == [
+        FIRST_REFRESH_BACKOFFS_SECONDS,
+        RETRY_BACKOFFS_SECONDS,
+    ]
+
+
+async def test_deadline_bounds_the_first_fetch_only(hass: HomeAssistant) -> None:
+    """The first fetch is capped by a wall-clock deadline over the *whole*
+    paginated fetch, so a slow-but-alive service cannot keep HA's boot
+    waiting; scheduled polls, which block nothing, are not capped."""
+    coordinator = _coordinator(hass)
+
+    async def slow_fetch(*args, **kwargs):
+        await asyncio.sleep(0.05)
+        return []
+
+    with (
+        patch(
+            "custom_components.incendiscat.coordinator.FIRST_REFRESH_DEADLINE_SECONDS",
+            0.01,
+        ),
+        patch(
+            "custom_components.incendiscat.coordinator.fetch_incidents",
+            AsyncMock(side_effect=slow_fetch),
+        ),
+    ):
+        await coordinator.async_refresh()
+        assert coordinator.last_update_success is False
+        assert isinstance(coordinator.last_exception, TimeoutError)
+
+        await coordinator.async_refresh()
+        assert coordinator.last_update_success is True

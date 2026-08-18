@@ -324,11 +324,11 @@ class FireRiskSensor(CoordinatorEntity[PlaAlfaCoordinator], SensorEntity):
     but shares the same `DeviceInfo` (see `entity.device_info`) so it shows
     up under the same "Incendis Catalunya" device.
 
-    Availability follows `CoordinatorEntity`'s default (`coordinator
-    .last_update_success`): when Pla Alfa is down (including a failed first
-    refresh — see `__init__.py`'s `async_setup_entry`), this entity reports
-    `unavailable` while the Bombers-backed sensors keep working normally
-    (independent coordinators/independent failure domains).
+    When Pla Alfa is down (including a failed first refresh, see
+    `__init__.py`'s `async_setup_entry`) this entity reports `unavailable`
+    while the Bombers-backed sensors keep working normally (independent
+    coordinators, independent failure domains). See `available` below for why
+    `CoordinatorEntity`'s default is not enough.
     """
 
     _attr_has_entity_name = True
@@ -341,6 +341,20 @@ class FireRiskSensor(CoordinatorEntity[PlaAlfaCoordinator], SensorEntity):
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_fire_risk"
         self._attr_device_info = device_info(entry)
+
+    @property
+    def available(self) -> bool:
+        """`unavailable` until the first Pla Alfa poll actually lands.
+
+        `CoordinatorEntity`'s default only tracks
+        `coordinator.last_update_success`, which `DataUpdateCoordinator`
+        initialises to `True` *before* any refresh has run. The Pla Alfa
+        first refresh is deliberately off the setup critical path
+        (`__init__.py`), so this entity is created while `coordinator.data`
+        is still `None` and the default would publish a data-less `unknown`
+        as if it were a real reading.
+        """
+        return super().available and self.coordinator.data is not None
 
     @property
     def native_value(self) -> int | None:

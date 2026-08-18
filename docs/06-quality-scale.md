@@ -53,7 +53,7 @@ Quan una regla és `exempt`, **sempre** portem un comentari d'una línia explica
 | `entity_unique_id` | `act_num` per `geo_location`, `entry_id+name` per sensors |
 | `has_entity_name` | A `_attr_has_entity_name = True` |
 | `runtime_data` | `entry.runtime_data` + alias tipat (no `hass.data`) |
-| `test_before_setup` | `async_config_entry_first_refresh()` al setup |
+| `test_before_setup` | `async_config_entry_first_refresh()` al setup (Bombers, acotat: sense reintents + deadline; Pla Alfa es difereix a `async_at_started` perquè és best-effort i no ha de bloquejar el boot; veure architecture §5) |
 | `brands` | `icon.png` 256×256 a `custom_components/incendiscat/brand/` (Brands Proxy API, HA ≥2026.3 — el repo `home-assistant/brands` ja no accepta noves integracions custom) |
 
 ### ⏳ Pendents (tots barats, ferm per v0.1.0)

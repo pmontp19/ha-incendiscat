@@ -212,6 +212,10 @@ class Incident:
 
 Convencions actuals: el coordinator es guarda a **`entry.runtime_data`** amb alias tipat (`type IncendiscatConfigEntry = ConfigEntry[IncendiscatDataUpdateCoordinator]`), **no** a `hass.data[DOMAIN]` (regla [runtime-data](https://developers.home-assistant.io/docs/core/integration-quality-scale/rules/runtime-data/)). A `async_setup_entry`: `await coordinator.async_config_entry_first_refresh()` perquè el setup falli net si el primer fetch falla. `always_update=False` (l'estat implementa `__eq__`) per estalviar escriptures d'estat.
 
+**Latència d'arrencada.** Aquell primer refresh és l'única crida que bloqueja el boot de HA, i està acotada explícitament: sense reintents dins del client (`arcgis.FIRST_REFRESH_BACKOFFS_SECONDS` és buit, perquè `ConfigEntryNotReady` ja fa que HA reintenti tot el setup a 5/10/20/40/80s sense bloquejar res) i amb un deadline de rellotge sobre el fetch sencer, paginació inclosa (`arcgis.FIRST_REFRESH_DEADLINE_SECONDS`, aplicat amb `asyncio.timeout` a `_async_update_data`). Els polls programats conserven l'escala completa de reintents.
+
+El coordinator de Pla Alfa, en canvi, no bloqueja el setup gens: el seu primer refresh es difereix amb `async_at_started` (s'executa quan HA ja ha acabat d'arrencar, com fan `cert_expiry`/`here_travel_time` al core) i corre com a background task propietat de l'entry, amb `async_refresh()` i no `async_config_entry_first_refresh()` (aquesta última exigeix estat `SETUP_IN_PROGRESS`). Mentre no arriba, `fire_risk`/`high_risk` són `unavailable`: totes dues sobreescriuen `available` per exigir `coordinator.data`, perquè `last_update_success` neix a `True` i el defecte de `CoordinatorEntity` publicaria un `unknown` sense dades al darrere.
+
 ### Estat que manté
 
 ```python

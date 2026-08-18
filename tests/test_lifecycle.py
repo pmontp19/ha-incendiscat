@@ -20,7 +20,8 @@ from custom_components.incendiscat.coordinator import IncendiscatDataUpdateCoord
 from custom_components.incendiscat.models import Fase
 from custom_components.incendiscat.pla_alfa import PlaAlfaRisk
 from homeassistant.config_entries import ConfigEntryState
-from homeassistant.core import HomeAssistant
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+from homeassistant.core import CoreState, HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
 from .conftest import FakeClock, make_config_entry, make_incident
@@ -92,8 +93,28 @@ async def test_unload_entry(hass: HomeAssistant) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Pla Alfa first refresh runs as an entry background task
+# Pla Alfa first refresh runs off the setup critical path
 # ---------------------------------------------------------------------------
+
+RISK_ALT = PlaAlfaRisk(
+    peril_m=2,
+    nivell_text="Alt",
+    municipi="Testville",
+    comarca="Testcomarca",
+    perill_dema=None,
+    data_vigencia=None,
+    hora_vigencia=None,
+)
+
+
+def _entity_state(hass: HomeAssistant, entry, platform: str, key: str) -> str:
+    entity_id = er.async_get(hass).async_get_entity_id(
+        platform, DOMAIN, f"{entry.entry_id}_{key}"
+    )
+    assert entity_id is not None, f"no {platform} entity for key {key!r}"
+    state = hass.states.get(entity_id)
+    assert state is not None
+    return state.state
 
 
 def _hanging_fetch_risk(park: asyncio.Event, release: asyncio.Event, result):
@@ -113,10 +134,10 @@ def _hanging_fetch_risk(park: asyncio.Event, release: asyncio.Event, result):
 async def test_setup_does_not_block_on_pla_alfa_first_refresh(
     hass: HomeAssistant, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """The Pla Alfa first refresh is an entry background task, off the
-    setup critical path: the entry must reach LOADED while the Pla Alfa
-    fetch is still in flight, and its later failure must only log — the
-    risk entities stay unavailable, everything else is unaffected."""
+    """The Pla Alfa first refresh runs off the setup critical path: the entry
+    must reach LOADED while the Pla Alfa fetch is still in flight, the two
+    risk entities must report `unavailable` (not a data-less `unknown`) in
+    that window, and an eventual failure must only log."""
     entry = make_config_entry()
     entry.add_to_hass(hass)
     park = asyncio.Event()
@@ -140,12 +161,57 @@ async def test_setup_does_not_block_on_pla_alfa_first_refresh(
         # Setup completed despite the fetch never having returned so far.
         assert entry.state is ConfigEntryState.LOADED
 
+        # In-flight window: `last_update_success` is still its initial `True`,
+        # so only the entities' `available` override keeps them from
+        # publishing a data-less `unknown` as if it were a reading.
+        assert entry.runtime_data.pla_alfa.last_update_success is True
+        assert entry.runtime_data.pla_alfa.data is None
+        assert _entity_state(hass, entry, "sensor", "fire_risk") == "unavailable"
+        assert _entity_state(hass, entry, "binary_sensor", "high_risk") == "unavailable"
+
         release.set()
         await hass.async_block_till_done(wait_background_tasks=True)
 
     assert entry.runtime_data.pla_alfa.data is None
     assert entry.runtime_data.pla_alfa.last_update_success is False
-    assert "Pla Alfa fire-risk data unavailable on startup" in caplog.text
+    assert "Pla Alfa fire-risk data unavailable on the first poll" in caplog.text
+    assert _entity_state(hass, entry, "sensor", "fire_risk") == "unavailable"
+
+
+async def test_pla_alfa_first_refresh_waits_for_home_assistant_start(
+    hass: HomeAssistant,
+) -> None:
+    """During a real boot the fetch is not even started: `async_at_started`
+    defers it to EVENT_HOMEASSISTANT_STARTED, so it never competes with the
+    rest of the startup."""
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    fetch_risk = AsyncMock(return_value=RISK_ALT)
+    hass.set_state(CoreState.starting)
+
+    try:
+        with (
+            _patched_fetch([]),
+            patch(
+                "custom_components.incendiscat.pla_alfa.fetch_risk",
+                fetch_risk,
+            ),
+        ):
+            assert await hass.config_entries.async_setup(entry.entry_id) is True
+            await hass.async_block_till_done(wait_background_tasks=True)
+            assert entry.state is ConfigEntryState.LOADED
+            assert fetch_risk.await_count == 0
+            assert _entity_state(hass, entry, "sensor", "fire_risk") == "unavailable"
+
+            hass.set_state(CoreState.running)
+            hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
+            await hass.async_block_till_done(wait_background_tasks=True)
+    finally:
+        hass.set_state(CoreState.running)
+
+    assert fetch_risk.await_count == 1
+    assert entry.runtime_data.pla_alfa.data is RISK_ALT
+    assert _entity_state(hass, entry, "sensor", "fire_risk") == "2"
 
 
 async def test_pla_alfa_background_refresh_populates_entities_when_done(
@@ -158,15 +224,7 @@ async def test_pla_alfa_background_refresh_populates_entities_when_done(
     entry.add_to_hass(hass)
     park = asyncio.Event()
     release = asyncio.Event()
-    risk = PlaAlfaRisk(
-        peril_m=2,
-        nivell_text="Alt",
-        municipi="Testville",
-        comarca="Testcomarca",
-        perill_dema=None,
-        data_vigencia=None,
-        hora_vigencia=None,
-    )
+    risk = RISK_ALT
 
     with (
         _patched_fetch([]),

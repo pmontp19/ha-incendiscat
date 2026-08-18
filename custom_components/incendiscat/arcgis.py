@@ -23,10 +23,10 @@ docs/04-architecture.md §2 — `requirements: []`). Responsibilities:
    ties).
 4. Retries — timeout/5xx get 3 retries with exponential backoff (1s/2s/4s);
    4xx errors are not retried (they usually mean the schema/URL changed).
-   The startup fetch (`fetch_incidents(first=True)`) uses a reduced
-   one-retry schedule instead, so slow/dead DNS cannot stall a blocked
-   Home Assistant startup for the whole ladder (see
-   `FIRST_RETRY_BACKOFFS_SECONDS`).
+   The retry schedule is a `fetch_incidents` argument, because the *first*
+   fetch after setup (the only one HA's boot waits for) deliberately runs
+   without in-client retries: see `FIRST_REFRESH_BACKOFFS_SECONDS` and
+   `FIRST_REFRESH_DEADLINE_SECONDS`.
 
 Deviation from docs/04-architecture.md §3 (found via live query, see
 tests/test_arcgis.py and the implementation report): the architecture sketch
@@ -72,15 +72,26 @@ REQUEST_TIMEOUT = aiohttp.ClientTimeout(total=30)
 RETRY_BACKOFFS_SECONDS: tuple[float, ...] = (1, 2, 4)
 MAX_ATTEMPTS = len(RETRY_BACKOFFS_SECONDS) + 1
 
-# Reduced schedule for the startup fetch only (`fetch_incidents(first=True)`,
-# passed by the coordinator for its first refresh after setup): with slow or
-# dead DNS every attempt burns the full `REQUEST_TIMEOUT`, so the default
-# ladder can block HA startup for up to ~127s (30+1+30+2+30+4+30) before
-# `ConfigEntryNotReady` surfaces. One retry caps that at ~61s
-# (30+1+30), which is as long as a blocked setup should reasonably wait;
-# scheduled polls keep the full 4-attempt ladder, so a flaky-but-alive
-# service still gets the resilient schedule during normal operation.
-FIRST_RETRY_BACKOFFS_SECONDS: tuple[float, ...] = (1,)
+# Retry/timeout policy for the coordinator's *first* fetch, the only one HA's
+# boot waits for, since `async_config_entry_first_refresh()` runs inside
+# `async_setup_entry` (see `__init__.py`'s startup-latency docstring).
+#
+# No in-client retries at all: a failed first refresh raises
+# `ConfigEntryNotReady`, and HA already retries the whole setup on its own
+# exponential schedule (5/10/20/40/80s, `config_entries.py`) without blocking
+# the rest of the boot. A second ladder here would only stretch the window HA
+# waits on us -- the old (1, 2, 4) ladder made it ~127s (30+1+30+2+30+4+30).
+# Scheduled polls keep the full ladder: there, retrying in-place is free.
+FIRST_REFRESH_BACKOFFS_SECONDS: tuple[float, ...] = ()
+
+# Wall-clock deadline for that same first fetch, applied by the coordinator.
+# `REQUEST_TIMEOUT` bounds a single *request*, not a whole fetch: pagination
+# (`MAX_PAGES`) multiplies it, so on a slow-but-alive link the blocked-boot
+# window is otherwise unbounded in practice. A full `since=None` fetch of the
+# live view is a single ~12 KB page measured at ~0.3s, so 15s leaves ~50x
+# headroom; if the deadline does expire, setup fails fast and HA retries
+# seconds later instead of holding the boot.
+FIRST_REFRESH_DEADLINE_SECONDS = 15
 
 # Body text embedded in ArcgisClientError messages (4xx responses) is
 # truncated to this many characters: the raw body flows unbounded into the
@@ -157,8 +168,9 @@ async def _fetch_page(
     """Fetch a single page, retrying on timeout/network/5xx errors.
 
     `backoffs` drives both the attempt count (`len(backoffs) + 1`) and the
-    sleeps between attempts; `fetch_incidents(first=True)` passes the
-    reduced `FIRST_RETRY_BACKOFFS_SECONDS` to cap the startup fetch.
+    sleeps between attempts; an empty tuple means a single attempt, which is
+    what the coordinator's first fetch uses
+    (`FIRST_REFRESH_BACKOFFS_SECONDS`).
     """
     params: dict[str, Any] = {
         "where": where,
@@ -228,8 +240,10 @@ async def _fetch_page(
     ):
         status = last_error.status
         kind = "http_5xx"
+    attempts_word = "attempt" if max_attempts == 1 else "attempts"
     raise ArcgisClientError(
-        f"ArcGIS FeatureServer unreachable after {max_attempts} attempts: {last_error}",
+        f"ArcGIS FeatureServer unreachable after {max_attempts} "
+        f"{attempts_word}: {last_error}",
         status=status,
         kind=kind,
     ) from last_error
@@ -266,17 +280,16 @@ async def fetch_incidents(
     out_sr: int = 4326,
     *,
     sleep: _SleepFn = _default_sleep,
-    first: bool = False,
+    backoffs: tuple[float, ...] = RETRY_BACKOFFS_SECONDS,
 ) -> list[Incident]:
     """Fetch all incidents new/modified since `since` (or the whole dataset).
 
     Paginates via `resultOffset` until `exceededTransferLimit` is false, then
     de-dups the append-only snapshot log before converting to `Incident`.
 
-    `first=True` (passed by the coordinator for its first refresh after
-    startup, while HA's boot is blocked on this setup) retries at most once
-    via `FIRST_RETRY_BACKOFFS_SECONDS`, so a dead network surfaces as
-    `ConfigEntryNotReady` in ~61s instead of ~127s.
+    `backoffs` is the retry schedule for every page of this fetch; the
+    coordinator passes `FIRST_REFRESH_BACKOFFS_SECONDS` (no retries) for the
+    first fetch after startup, while HA's boot is blocked on this setup.
     """
     where = "1=1" if since is None else _since_where_clause(since)
     order_by = "DATA_ACT ASC" if since is not None else None
@@ -291,7 +304,7 @@ async def fetch_incidents(
             offset=offset,
             order_by=order_by,
             sleep=sleep,
-            backoffs=FIRST_RETRY_BACKOFFS_SECONDS if first else RETRY_BACKOFFS_SECONDS,
+            backoffs=backoffs,
         )
         raw_features.extend(data.get("features", []))
         exceeded = (data.get("properties") or {}).get("exceededTransferLimit", False)

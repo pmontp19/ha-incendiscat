@@ -90,6 +90,7 @@ surfaces as a normal `ConfigEntryNotReady` setup retry.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -100,7 +101,13 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util.dt import utcnow
 
-from .arcgis import ArcgisClientError, fetch_incidents
+from .arcgis import (
+    FIRST_REFRESH_BACKOFFS_SECONDS,
+    FIRST_REFRESH_DEADLINE_SECONDS,
+    RETRY_BACKOFFS_SECONDS,
+    ArcgisClientError,
+    fetch_incidents,
+)
 from .const import (
     BOMBERS_VIEWER_URL,
     CONF_ACTIVE_PHASES,
@@ -538,12 +545,13 @@ class IncendiscatDataUpdateCoordinator(DataUpdateCoordinator[IncendiscatState]):
         self._session = session
         self._resolved_grace_minutes = resolved_grace_minutes
         # One-shot flag consumed by `_async_update_data`: only the first
-        # fetch after startup uses the reduced retry schedule
-        # (`arcgis.FIRST_RETRY_BACKOFFS_SECONDS`, one retry instead of
-        # three) so a dead network fails the first refresh -- and surfaces
-        # `ConfigEntryNotReady` to HA -- in ~61s instead of ~127s, keeping
-        # the setup-blocking window short. A setup retry builds a fresh
-        # coordinator (fresh `True`), so every blocked-boot fetch is fast.
+        # fetch -- the one HA's boot waits for, inside
+        # `async_config_entry_first_refresh()` -- gets the fast-fail policy
+        # (`arcgis.FIRST_REFRESH_BACKOFFS_SECONDS`: no in-client retries,
+        # plus the `FIRST_REFRESH_DEADLINE_SECONDS` wall-clock cap). It fails
+        # into `ConfigEntryNotReady`, and HA's setup retry builds a fresh
+        # coordinator (flag `True` again), so every blocked-boot fetch stays
+        # bounded; scheduled polls keep the full 4-attempt retry ladder.
         self._first_refresh = True
         # Companion Pla Alfa coordinator, attached by `async_setup_entry`
         # right after both coordinators are built. Declared here as a typed
@@ -586,9 +594,25 @@ class IncendiscatDataUpdateCoordinator(DataUpdateCoordinator[IncendiscatState]):
             # Always a full fetch (since=None): see the module docstring's
             # "Sync strategy" section for why an incremental cursor can
             # never observe a deletion against this particular view.
-            fetched = await fetch_incidents(
-                self._session, since=None, first=first_fetch
-            )
+            #
+            # The deadline caps the *whole* fetch, pagination included, for
+            # the one refresh HA's boot waits on; `asyncio.timeout(None)` is
+            # a no-op, so scheduled polls (which block nothing) keep only
+            # their per-request `REQUEST_TIMEOUT`. A blown deadline raises
+            # `TimeoutError`, which `DataUpdateCoordinator` turns into the
+            # `ConfigEntryNotReady` that makes HA retry setup.
+            async with asyncio.timeout(
+                FIRST_REFRESH_DEADLINE_SECONDS if first_fetch else None
+            ):
+                fetched = await fetch_incidents(
+                    self._session,
+                    since=None,
+                    backoffs=(
+                        FIRST_REFRESH_BACKOFFS_SECONDS
+                        if first_fetch
+                        else RETRY_BACKOFFS_SECONDS
+                    ),
+                )
         except ArcgisClientError as err:
             if previous is not None:
                 # Mutate in place: self.data keeps this same object (HA does
