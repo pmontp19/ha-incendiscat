@@ -30,9 +30,13 @@ instantly). We call the first group "active" and the whole dict "tracked".
   window (otherwise the `extingit` attribute would be permanently 0 and the
   sensor would carry no more information than `active_fires` split in two).
 
-`nearest_fire_distance` reports `None` (HA renders it as "unknown") when
-there is no active fire, per HA's entity guidance against magic/sentinel
-values on `device_class=DISTANCE` numeric fields.
+`nearest_fire_distance` and `nearest_fire_municipi` report `None` (HA
+renders it as "unknown") when there is no active fire, per HA's entity
+guidance against magic/sentinel values: a `-1` km reading would enter
+long-term statistics as if it were real, and a `"—"` municipality name is
+indistinguishable from a genuine one to any template consuming the state.
+`nearest_fire_municipi` is also `None` when the nearest fire *has* no
+`municipi` in the source record: the name is unknown either way.
 """
 
 from __future__ import annotations
@@ -62,7 +66,6 @@ from .icons import DEFAULT_FASE_ICON, DEFAULT_TIPUS_ICON, FASE_ICONS, TIPUS_ICON
 from .models import Fase, Incident, Tipus
 from .pla_alfa import PlaAlfaCoordinator, PlaAlfaRisk
 
-NO_MUNICIPI = "—"
 FIRES_UNIT = "incendis"
 
 # mdi icon per PERIL_M level (0-4), for FireRiskSensor. Not in icons.py: that
@@ -186,7 +189,10 @@ class NearestFireDistanceSensor(IncendiscatEntity, SensorEntity):
 
 
 class NearestFireMunicipiSensor(IncendiscatEntity, SensorEntity):
-    """`sensor.incendiscat_nearest_fire_municipi` (feature-spec §3.4)."""
+    """`sensor.incendiscat_nearest_fire_municipi` (feature-spec §3.4).
+
+    See the module docstring for the `None`-when-unknown design note.
+    """
 
     def __init__(
         self,
@@ -196,13 +202,13 @@ class NearestFireMunicipiSensor(IncendiscatEntity, SensorEntity):
         super().__init__(coordinator, entry, "nearest_fire_municipi")
 
     @property
-    def native_value(self) -> str:
+    def native_value(self) -> str | None:
         state: IncendiscatState = self.coordinator.data
         active = _active_incidents(state, self.coordinator.config.active_phases)
         nearest = _nearest(active, self.coordinator)
         if nearest is None:
-            return NO_MUNICIPI
-        return nearest.municipi or NO_MUNICIPI
+            return None
+        return nearest.municipi or None
 
 
 class FiresPerFaseSensor(IncendiscatEntity, SensorEntity):

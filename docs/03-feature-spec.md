@@ -110,7 +110,7 @@ State: km (float, 1 decimal) a l'incendi actiu més proper dins del radi de segu
 
 ### 3.4 `sensor.incendiscat_nearest_fire_municipi`
 
-State: nom del municipi del foc més proper. `"—"` si no n'hi ha cap. Útil per a notificacions parlades ("Hi ha foc a Sant Quirze Safaja").
+State: nom del municipi del foc més proper. `unknown` (`None`) si no n'hi ha cap, o si el registre d'origen no en porta. Útil per a notificacions parlades ("Hi ha foc a Sant Quirze Safaja").
 
 ### 3.5 `sensor.incendiscat_fires_per_fase` ⭐ (diferencial)
 

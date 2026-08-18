@@ -97,7 +97,7 @@ async def test_empty_data_defaults(hass: HomeAssistant) -> None:
 
     assert _state(hass, entry, "active_fires").state == "0"
     assert _state(hass, entry, "nearest_fire_distance").state == "unknown"
-    assert _state(hass, entry, "nearest_fire_municipi").state == "—"
+    assert _state(hass, entry, "nearest_fire_municipi").state == "unknown"
     assert _state(hass, entry, "fires_per_fase").state == "0"
     assert _state(hass, entry, "fires_per_tipus").state == "0"
     assert _state(hass, entry, "total_vehicles").state == "0"
@@ -154,6 +154,19 @@ async def test_nearest_fire_distance_is_smallest(hass: HomeAssistant) -> None:
     assert 0 <= distance < 20  # close is ~5.5 km, far is ~55 km
 
 
+async def test_nearest_fire_municipi_unknown_when_source_has_none(
+    hass: HomeAssistant,
+) -> None:
+    """An active fire whose source record carries no `municipi` leaves the
+    sensor `unknown`, not a placeholder that templates cannot tell apart
+    from a real municipality name."""
+    with _patched_fetch([make_incident("1", fase=Fase.ACTIU, municipi=None)]):
+        entry = await _setup(hass)
+
+    assert _state(hass, entry, "active_fires").state == "1"
+    assert _state(hass, entry, "nearest_fire_municipi").state == "unknown"
+
+
 async def test_active_fires_excludes_grace_period_extingit(
     hass: HomeAssistant,
 ) -> None:
@@ -171,7 +184,7 @@ async def test_active_fires_excludes_grace_period_extingit(
     assert "1" in entry.runtime_data.data.incidents
     assert _state(hass, entry, "active_fires").state == "0"
     assert _state(hass, entry, "nearest_fire_distance").state == "unknown"
-    assert _state(hass, entry, "nearest_fire_municipi").state == "—"
+    assert _state(hass, entry, "nearest_fire_municipi").state == "unknown"
     # fires_per_fase / total_vehicles still count it (tracked, not active).
     assert _state(hass, entry, "fires_per_fase").state == "1"
     assert _state(hass, entry, "fires_per_fase").attributes["extingit"] == 1
