@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.4](https://github.com/pmontp19/ha-incendiscat/compare/ha-incendiscat-v0.3.3...ha-incendiscat-v0.3.4) (2026-08-18)
+
+
+### Performance Improvements
+
+* keep HA startup off the slow first-refresh critical path ([#23](https://github.com/pmontp19/ha-incendiscat/issues/23)) ([033bba0](https://github.com/pmontp19/ha-incendiscat/commit/033bba0337e6a9d2fa0ac48ab1f07000985312a0))
+
+
+### Documentation
+
+* **agents:** dedupe AGENTS.md against CONTRIBUTING.md ([#21](https://github.com/pmontp19/ha-incendiscat/issues/21)) ([ba3e748](https://github.com/pmontp19/ha-incendiscat/commit/ba3e74875360329a92f54af8476b466a47256506))
+
 ## [0.3.3](https://github.com/pmontp19/ha-incendiscat/compare/ha-incendiscat-v0.3.2...ha-incendiscat-v0.3.3) (2026-08-09)
 
 
