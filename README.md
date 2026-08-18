@@ -51,7 +51,7 @@ Els `entity_id` d'aquesta taula corresponen a una instància de Home Assistant c
 | --- | --- |
 | `sensor.incendis_catalunya_incendis_actius` | Nombre d'incendis actius (fases configurades) dins el radi de seguiment. Atributs: `last_updated`, `total_in_track_radius`, `total_in_alert_radius`. |
 | `sensor.incendis_catalunya_distancia_a_l_incendi_mes_proper` | Distància en km a l'incendi actiu més proper. `unknown` si no n'hi ha cap. |
-| `sensor.incendis_catalunya_municipi_de_l_incendi_mes_proper` | Municipi de l'incendi actiu més proper. `"—"` si no n'hi ha cap. |
+| `sensor.incendis_catalunya_municipi_de_l_incendi_mes_proper` | Municipi de l'incendi actiu més proper. `unknown` si no n'hi ha cap (o si el registre d'origen no en porta). |
 | `sensor.incendis_catalunya_incendis_per_fase` | Total d'incendis en seguiment; atributs `actiu`, `estabilitzat`, `controlat`, `extingit`. |
 | `sensor.incendis_catalunya_incendis_per_tipus` | Total d'incendis en seguiment; atributs `vf`, `va`, `vu`. |
 | `sensor.incendis_catalunya_vehicles_desplegats` | Suma de vehicles desplegats als incendis en seguiment. |
