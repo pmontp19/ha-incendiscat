@@ -30,13 +30,9 @@ instantly). We call the first group "active" and the whole dict "tracked".
   window (otherwise the `extingit` attribute would be permanently 0 and the
   sensor would carry no more information than `active_fires` split in two).
 
-Sentinel note (`nearest_fire_distance` = `-1` when there is no active fire):
-`-1` under `device_class=DISTANCE` is admittedly an odd choice for a numeric
-`float` field over a nice `unit=km` scale (unlike `native_value=None`, which
-HA would render as "unknown" and is the idiomatic no-data value for a
-measurement). We implement `-1` as feature-spec §3.3 explicitly specifies it
-byte-for-byte, but if this sensor's spec is revisited we'd recommend
-`None`/unknown instead.
+`nearest_fire_distance` reports `None` (HA renders it as "unknown") when
+there is no active fire, per HA's entity guidance against magic/sentinel
+values on `device_class=DISTANCE` numeric fields.
 """
 
 from __future__ import annotations
@@ -165,7 +161,7 @@ class ActiveFiresSensor(IncendiscatEntity, SensorEntity):
 class NearestFireDistanceSensor(IncendiscatEntity, SensorEntity):
     """`sensor.incendiscat_nearest_fire_distance` (feature-spec §3.3).
 
-    See the module docstring for the `-1` sentinel design note.
+    See the module docstring for the `None`-when-no-active-fire design note.
     """
 
     _attr_device_class = SensorDeviceClass.DISTANCE
@@ -180,12 +176,12 @@ class NearestFireDistanceSensor(IncendiscatEntity, SensorEntity):
         super().__init__(coordinator, entry, "nearest_fire_distance")
 
     @property
-    def native_value(self) -> float:
+    def native_value(self) -> float | None:
         state: IncendiscatState = self.coordinator.data
         active = _active_incidents(state, self.coordinator.config.active_phases)
         nearest = _nearest(active, self.coordinator)
         if nearest is None:
-            return -1
+            return None
         return round(self.coordinator.distance_km(nearest), 1)
 
 
