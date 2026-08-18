@@ -9,6 +9,7 @@ import aiohttp
 import pytest
 from aioresponses import CallbackResult, aioresponses
 from custom_components.incendiscat.arcgis import (
+    FIRST_REFRESH_BACKOFFS_SECONDS,
     MAX_ATTEMPTS,
     MAX_ERROR_BODY_CHARS,
     MAX_PAGES,
@@ -281,6 +282,65 @@ async def test_5xx_succeeds_after_transient_failures() -> None:
 
     assert incidents == []
     assert call_count == 3
+
+
+async def test_first_refresh_schedule_makes_a_single_attempt() -> None:
+    """The coordinator's first fetch passes the empty
+    `FIRST_REFRESH_BACKOFFS_SECONDS`: no in-client retry at all, because HA
+    retries the whole setup itself and every extra attempt here is time HA's
+    boot spends blocked on us."""
+    call_count = 0
+
+    def callback(url, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        return CallbackResult(status=503, body="upstream error")
+
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    with aioresponses() as mocked:
+        mocked.get(QUERY_URL_PATTERN, callback=callback, repeat=True)
+        async with aiohttp.ClientSession() as session:
+            with pytest.raises(ArcgisClientError) as exc_info:
+                await fetch_incidents(
+                    session,
+                    sleep=fake_sleep,
+                    backoffs=FIRST_REFRESH_BACKOFFS_SECONDS,
+                )
+
+    assert call_count == len(FIRST_REFRESH_BACKOFFS_SECONDS) + 1 == 1
+    assert sleeps == []
+    assert exc_info.value.kind == "http_5xx"
+    # Singular, since "after 1 attempts" reaches the Repairs UI/diagnostics.
+    assert "after 1 attempt:" in str(exc_info.value)
+
+
+async def test_backoffs_argument_drives_attempts_and_sleeps() -> None:
+    """`backoffs` is the whole retry policy for a fetch: attempt count is
+    `len(backoffs) + 1` and the sleeps are the tuple itself."""
+    call_count = 0
+
+    def callback(url, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        return CallbackResult(status=503, body="upstream error")
+
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    with aioresponses() as mocked:
+        mocked.get(QUERY_URL_PATTERN, callback=callback, repeat=True)
+        async with aiohttp.ClientSession() as session:
+            with pytest.raises(ArcgisClientError):
+                await fetch_incidents(session, sleep=fake_sleep, backoffs=(0.5, 1.5))
+
+    assert call_count == 3
+    assert sleeps == [0.5, 1.5]
 
 
 async def test_4xx_raises_immediately_without_retry() -> None:

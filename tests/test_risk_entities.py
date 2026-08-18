@@ -17,8 +17,10 @@ from unittest.mock import AsyncMock, patch
 
 from custom_components.incendiscat.arcgis import ArcgisClientError
 from custom_components.incendiscat.arcgis import ArcgisClientError as BombersError
+from custom_components.incendiscat.binary_sensor import HighRiskBinarySensor
 from custom_components.incendiscat.const import CONF_HIGH_RISK_THRESHOLD, DOMAIN
 from custom_components.incendiscat.pla_alfa import PlaAlfaRisk
+from custom_components.incendiscat.sensor import FireRiskSensor
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
@@ -164,6 +166,34 @@ async def test_pla_alfa_failure_leaves_risk_entities_unavailable(
 
     high_risk_state = _state(hass, entry, "binary_sensor", "high_risk")
     assert high_risk_state.state == "unavailable"
+
+
+async def test_risk_entities_tolerate_a_coordinator_without_data(
+    hass: HomeAssistant,
+) -> None:
+    """Both entities are built before the Pla Alfa first refresh can land
+    (it runs off the setup critical path, see `__init__.py`), so with no data
+    they must report `unavailable` *and* every value/attribute property must
+    stay safe to call rather than raising on `None`."""
+    with (
+        _patched_incidents([]),
+        _patched_risk(ArcgisClientError("Pla Alfa unreachable")),
+    ):
+        entry = await _setup(hass)
+
+    coordinator = entry.runtime_data.pla_alfa
+    assert coordinator.data is None
+
+    sensor = FireRiskSensor(coordinator, entry)
+    binary_sensor = HighRiskBinarySensor(entry)
+
+    assert sensor.available is False
+    assert sensor.native_value is None
+    assert sensor.extra_state_attributes is None
+
+    assert binary_sensor.available is False
+    assert binary_sensor.is_on is None
+    assert binary_sensor.extra_state_attributes is None
 
 
 async def test_pla_alfa_failure_does_not_affect_fires_sensors(

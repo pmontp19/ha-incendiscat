@@ -146,10 +146,9 @@ class HighRiskBinarySensor(CoordinatorEntity[PlaAlfaCoordinator], BinarySensorEn
     `_async_update_listener` in `__init__.py`), rebuilding every entity
     anyway.
 
-    Backed by `PlaAlfaCoordinator`: `is_on` is `None` (unknown/unavailable,
-    via `CoordinatorEntity`'s default `available =
-    coordinator.last_update_success`) whenever Pla Alfa has no data yet,
-    independent of the Bombers coordinator's own health.
+    Backed by `PlaAlfaCoordinator`, so it reports `unavailable` whenever Pla
+    Alfa has no data yet (see `available` below), independent of the Bombers
+    coordinator's own health.
     """
 
     _attr_has_entity_name = True
@@ -165,6 +164,18 @@ class HighRiskBinarySensor(CoordinatorEntity[PlaAlfaCoordinator], BinarySensorEn
             entry.options.get(CONF_HIGH_RISK_THRESHOLD, DEFAULT_HIGH_RISK_THRESHOLD)
         )
         self._attr_device_info = device_info(entry)
+
+    @property
+    def available(self) -> bool:
+        """`unavailable` until the first Pla Alfa poll actually lands.
+
+        Same reason as `sensor.FireRiskSensor.available`:
+        `coordinator.last_update_success` starts out `True`, and the Pla Alfa
+        first refresh runs off the setup critical path (`__init__.py`), so
+        `CoordinatorEntity`'s default would leave this entity `available`
+        with no data behind it.
+        """
+        return super().available and self.coordinator.data is not None
 
     @property
     def is_on(self) -> bool | None:
