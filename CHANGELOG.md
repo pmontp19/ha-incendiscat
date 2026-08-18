@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.5](https://github.com/pmontp19/ha-incendiscat/compare/ha-incendiscat-v0.3.4...ha-incendiscat-v0.3.5) (2026-08-18)
+
+
+### Bug Fixes
+
+* report nearest_fire_distance as unknown with no active fire ([5bf3ca8](https://github.com/pmontp19/ha-incendiscat/commit/5bf3ca8d64f1a54ae656ccfcef02a545efe20917))
+* report nearest_fire_distance as unknown with no active fire ([ecba231](https://github.com/pmontp19/ha-incendiscat/commit/ecba23131eda5f31ff6c0abcd26b2e593045a9dc))
+* report nearest_fire_municipi as unknown when there is none ([#26](https://github.com/pmontp19/ha-incendiscat/issues/26)) ([1dcffd6](https://github.com/pmontp19/ha-incendiscat/commit/1dcffd6f900b4505839fe0e8b05c8f074a6b8c7d))
+
 ## [0.3.4](https://github.com/pmontp19/ha-incendiscat/compare/ha-incendiscat-v0.3.3...ha-incendiscat-v0.3.4) (2026-08-18)
 
 
