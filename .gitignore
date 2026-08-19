@@ -16,6 +16,14 @@ env/
 build/
 dist/
 
+# uv lockfile: deliberately not versioned. Nothing consumes it (CI and
+# CONTRIBUTING install with `uv pip install -r requirements_dev.txt`), the
+# pyproject declares no dependencies for it to resolve, and dependabot owns
+# the exact pins in requirements_dev.txt. Committing it would add a second,
+# unmaintained source of truth. Revisit only if the project moves to
+# `uv sync --locked` with dev deps declared in `[dependency-groups]`.
+uv.lock
+
 # Tests / coverage
 .pytest_cache/
 .coverage
